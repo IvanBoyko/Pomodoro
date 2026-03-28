@@ -1,9 +1,16 @@
+//
+//  PomodoroApp.swift
+//  Pomodoro
+//
+//  Created by fenix on 28/03/2026.
+//
+
 import SwiftUI
 import SwiftData
 import UserNotifications
 
 @main
-struct PomodoroTrackerApp: App {
+struct PomodoroApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             PomodoroCategory.self,
