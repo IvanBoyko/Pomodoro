@@ -15,6 +15,7 @@ final class TimerViewModel {
 
     var remainingSeconds: Int = Int(TimerViewModel.pomodoroDuration)
     var isRunning: Bool = false
+    var isPaused: Bool = false
     var isCompleted: Bool = false
     var showCategoryPicker: Bool = false
 
@@ -52,9 +53,33 @@ final class TimerViewModel {
         }
     }
 
+    func pause() {
+        guard isRunning else { return }
+        stopTimer()
+        isRunning = false
+        isPaused = true
+        cancelNotification()
+    }
+
+    func resume() {
+        guard isPaused else { return }
+        isPaused = false
+        isRunning = true
+        // Shift startDate so elapsed-based tick gives the correct remaining time
+        startDate = Date().addingTimeInterval(-(TimerViewModel.pomodoroDuration - Double(remainingSeconds)))
+        scheduleNotification(in: TimeInterval(remainingSeconds))
+
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.tick()
+            }
+        }
+    }
+
     func cancel() {
         stopTimer()
         isRunning = false
+        isPaused = false
         isCompleted = false
         remainingSeconds = Int(TimerViewModel.pomodoroDuration)
         startDate = nil
@@ -106,14 +131,14 @@ final class TimerViewModel {
         timer = nil
     }
 
-    private func scheduleNotification() {
+    private func scheduleNotification(in interval: TimeInterval = TimerViewModel.pomodoroDuration) {
         let content = UNMutableNotificationContent()
         content.title = "Pomodoro Complete!"
         content.body = "Time to assign a category to your session."
         content.sound = .default
 
         let trigger = UNTimeIntervalNotificationTrigger(
-            timeInterval: TimerViewModel.pomodoroDuration,
+            timeInterval: interval,
             repeats: false
         )
 

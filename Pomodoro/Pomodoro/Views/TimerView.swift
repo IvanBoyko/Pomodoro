@@ -33,19 +33,31 @@ struct TimerView: View {
                     Circle()
                         .trim(from: 0, to: timerVM.progress)
                         .stroke(
-                            timerVM.isRunning ? Color.accentColor : Color.green,
+                            timerVM.isRunning ? Color.accentColor : (timerVM.isPaused ? .orange : .green),
                             style: StrokeStyle(lineWidth: 12, lineCap: .round)
                         )
                         .frame(width: 260, height: 260)
                         .rotationEffect(.degrees(-90))
                         .animation(.linear(duration: 1), value: timerVM.progress)
 
-                    VStack(spacing: 8) {
+                    VStack(spacing: 12) {
                         Text(timerVM.displayTime)
                             .font(.system(size: 56, weight: .thin, design: .monospaced))
                             .contentTransition(.numericText())
 
-                        if !timerVM.isRunning && !timerVM.isCompleted {
+                        if timerVM.isRunning || timerVM.isPaused {
+                            Button {
+                                if timerVM.isRunning {
+                                    timerVM.pause()
+                                } else {
+                                    timerVM.resume()
+                                }
+                            } label: {
+                                Image(systemName: timerVM.isRunning ? "pause.fill" : "play.fill")
+                                    .font(.system(size: 44))
+                                    .foregroundStyle(timerVM.isRunning ? Color.accentColor : .orange)
+                            }
+                        } else {
                             Text("25 minutes")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
@@ -54,7 +66,7 @@ struct TimerView: View {
                 }
 
                 HStack(spacing: 20) {
-                    if timerVM.isRunning {
+                    if timerVM.isRunning || timerVM.isPaused {
                         Button(role: .destructive) {
                             timerVM.cancel()
                         } label: {
