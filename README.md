@@ -1,4 +1,6 @@
 
+# Initial Claude Code prompt
+
 This is a brain dump of what I want to build.
 Turn it into a technical spec and start building.
 
