@@ -15,6 +15,7 @@ struct CategoriesView: View {
 
     @State private var showAddSheet = false
     @State private var editingCategory: PomodoroCategory?
+    @State private var pendingDeleteOffsets: IndexSet?
 
     var body: some View {
         NavigationStack {
@@ -44,7 +45,7 @@ struct CategoriesView: View {
                         }
                     }
                 }
-                .onDelete(perform: deleteCategories)
+                .onDelete { offsets in pendingDeleteOffsets = offsets }
             }
             .navigationTitle("Categories")
             .navigationBarTitleDisplayMode(.inline)
@@ -66,12 +67,17 @@ struct CategoriesView: View {
             .sheet(item: $editingCategory) { category in
                 CategoryFormView(category: category)
             }
-        }
-    }
-
-    private func deleteCategories(at offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(categories[index])
+            .confirmationDialog("Delete category?", isPresented: Binding(
+                get: { pendingDeleteOffsets != nil },
+                set: { if !$0 { pendingDeleteOffsets = nil } }
+            ), titleVisibility: .visible) {
+                Button("Delete", role: .destructive) {
+                    if let offsets = pendingDeleteOffsets {
+                        for index in offsets { modelContext.delete(categories[index]) }
+                    }
+                    pendingDeleteOffsets = nil
+                }
+            }
         }
     }
 }
