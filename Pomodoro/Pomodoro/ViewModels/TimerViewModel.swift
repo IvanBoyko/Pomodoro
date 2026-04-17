@@ -5,13 +5,21 @@
 //  Created by fenix on 28/03/2026.
 //
 
+import CoreHaptics
 import Foundation
 import SwiftUI
+import UIKit
 import UserNotifications
 
 @Observable
 final class TimerViewModel {
-    static let pomodoroDuration: TimeInterval = 25 * 60
+    static let pomodoroDuration: TimeInterval = {
+        #if DEBUG
+        if let val = ProcessInfo.processInfo.environment["POMODORO_DURATION"],
+           let seconds = TimeInterval(val) { return seconds }
+        #endif
+        return 25 * 60
+    }()
 
     var remainingSeconds: Int = Int(TimerViewModel.pomodoroDuration)
     var isRunning: Bool = false
@@ -22,6 +30,8 @@ final class TimerViewModel {
     private var timer: Timer?
     private var startDate: Date?
     private var endDate: Date?
+    private var hapticEngine: CHHapticEngine?
+    private var hapticPlayer: CHHapticPatternPlayer?
 
     var completedStartDate: Date? { startDate }
     var completedEndDate: Date? { endDate }
@@ -124,6 +134,7 @@ final class TimerViewModel {
         remainingSeconds = 0
         endDate = Date()
         showCategoryPicker = true
+        triggerCompletionHaptic()
     }
 
     private func stopTimer() {
@@ -149,6 +160,46 @@ final class TimerViewModel {
         )
 
         UNUserNotificationCenter.current().add(request)
+    }
+
+    private func triggerCompletionHaptic() {
+        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
+            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+            return
+        }
+        do {
+            let engine = try CHHapticEngine()
+            hapticEngine = engine
+            let events: [CHHapticEvent] = [
+                CHHapticEvent(
+                    eventType: .hapticContinuous,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 1.0),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.3)
+                    ],
+                    relativeTime: 0, duration: 1.0
+                ),
+                CHHapticEvent(eventType: .hapticTransient, parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 1.0),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 1.0)
+                ], relativeTime: 0.0),
+                CHHapticEvent(eventType: .hapticTransient, parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 1.0),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 1.0)
+                ], relativeTime: 0.3),
+                CHHapticEvent(eventType: .hapticTransient, parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 1.0),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 1.0)
+                ], relativeTime: 0.6),
+            ]
+            let pattern = try CHHapticPattern(events: events, parameters: [])
+            let player = try engine.makePlayer(with: pattern)
+            hapticPlayer = player
+            engine.start { [weak self] error in
+                guard error == nil else { return }
+                try? self?.hapticPlayer?.start(atTime: CHHapticTimeImmediate)
+            }
+        } catch {}
     }
 
     private func cancelNotification() {

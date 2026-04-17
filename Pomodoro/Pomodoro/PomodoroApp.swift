@@ -11,6 +11,8 @@ import UserNotifications
 
 @main
 struct PomodoroApp: App {
+    @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             PomodoroCategory.self,
@@ -29,13 +31,20 @@ struct PomodoroApp: App {
         WindowGroup {
             ContentView()
                 .onAppear {
-                    requestNotificationPermission()
+                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
                 }
         }
         .modelContainer(sharedModelContainer)
     }
+}
 
-    private func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
+class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.sound])
     }
 }
