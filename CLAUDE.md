@@ -1,5 +1,10 @@
 # Working preferences
 
+## Important files
+- SPEC.md - specification / Technical Requirements Document, keep it in sync with code changes
+- CLAUDE.md - personal Ivan's preferences of using Claude Code, suggest updates based on coding sessions in Claude
+- TODO.md - informal list of changes to be done, bugs, new features etc, update it when implementing todo tasks from this file
+
 ## Branch & workflow
 - Always work directly on `main`. No worktrees, no feature branches, no PRs unless explicitly asked.
 - Commit changes to `main` and push. Ivan tests locally in Xcode on his iPhone before deciding to keep or revert.
