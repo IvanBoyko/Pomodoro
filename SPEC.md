@@ -17,7 +17,7 @@ A native iOS app (SwiftUI + SwiftData) for tracking Pomodoro sessions throughout
 |-------|------|-------|
 | id | UUID | Primary key |
 | name | String | e.g. "Personal", "Work" |
-| color | String | Hex color for UI |
+| colorHex | String | Hex color for UI |
 | createdAt | Date | |
 
 ### PomodoroSession
@@ -32,7 +32,7 @@ A native iOS app (SwiftUI + SwiftData) for tracking Pomodoro sessions throughout
 
 ### 1. Timer (Main Screen)
 - Large circular countdown timer (25:00)
-- Start / Cancel button
+- Start / Pause / Resume / Cancel controls
 - Shows current session count for today
 - When timer completes: vibration + local notification + presents category assignment sheet
 
@@ -43,12 +43,14 @@ A native iOS app (SwiftUI + SwiftData) for tracking Pomodoro sessions throughout
 - Tapping a category saves the session and dismisses
 
 ### 3. Daily Summary
-- Today's date header
-- Total Pomodoros completed
-- Breakdown per category (name + count + color bar)
+- Date picker to select any day (defaults to today)
+- Total Pomodoros completed and total minutes focused
+- Breakdown per category (name + count)
+- Distribution bar showing relative category share
 
 ### 4. Weekly Summary
-- 7-day table (Mon-Sun)
+- 7-day table (Mon-Sun) for the selected week
+- Previous/next week navigation (next disabled when on current week)
 - Rows = categories, Columns = days
 - Cell = count of Pomodoros
 - Bottom row = daily totals
@@ -65,8 +67,9 @@ A native iOS app (SwiftUI + SwiftData) for tracking Pomodoro sessions throughout
 
 ## Timer Behavior
 - 25-minute countdown
-- Runs via `Timer.publish` with background time tracking (store start time, compute remaining on foreground)
+- Runs via `Timer.scheduledTimer` with background time tracking (store start time, compute remaining on foreground)
 - Local notification scheduled at start so it fires even if app is backgrounded
+- Pause cancels the pending notification; resume reschedules it for the remaining time
 - On completion: haptic feedback + sound + category assignment sheet
 
 ## Constraints
