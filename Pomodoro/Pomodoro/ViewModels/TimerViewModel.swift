@@ -5,6 +5,7 @@
 //  Created by fenix on 28/03/2026.
 //
 
+import ActivityKit
 import CoreHaptics
 import Foundation
 import SwiftUI
@@ -32,6 +33,7 @@ final class TimerViewModel {
     private var endDate: Date?
     private var hapticEngine: CHHapticEngine?
     private var hapticPlayer: CHHapticPatternPlayer?
+    private var liveActivity: Activity<PomodoroActivityAttributes>?
 
     var completedStartDate: Date? { startDate }
     var completedEndDate: Date? { endDate }
@@ -55,6 +57,7 @@ final class TimerViewModel {
         remainingSeconds = Int(TimerViewModel.pomodoroDuration)
 
         scheduleNotification()
+        startLiveActivity(endTime: Date().addingTimeInterval(TimerViewModel.pomodoroDuration))
 
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
@@ -69,6 +72,8 @@ final class TimerViewModel {
         isRunning = false
         isPaused = true
         cancelNotification()
+        updateLiveActivity(endTime: Date().addingTimeInterval(TimeInterval(remainingSeconds)),
+                           isPaused: true)
     }
 
     func resume() {
@@ -78,6 +83,8 @@ final class TimerViewModel {
         // Shift startDate so elapsed-based tick gives the correct remaining time
         startDate = Date().addingTimeInterval(-(TimerViewModel.pomodoroDuration - Double(remainingSeconds)))
         scheduleNotification(in: TimeInterval(remainingSeconds))
+        updateLiveActivity(endTime: Date().addingTimeInterval(TimeInterval(remainingSeconds)),
+                           isPaused: false)
 
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
@@ -94,6 +101,7 @@ final class TimerViewModel {
         remainingSeconds = Int(TimerViewModel.pomodoroDuration)
         startDate = nil
         cancelNotification()
+        endLiveActivity()
     }
 
     func resetAfterSave() {
@@ -135,6 +143,7 @@ final class TimerViewModel {
         endDate = Date()
         showCategoryPicker = true
         triggerCompletionHaptic()
+        endLiveActivity()
     }
 
     private func stopTimer() {
@@ -205,5 +214,36 @@ final class TimerViewModel {
     private func cancelNotification() {
         UNUserNotificationCenter.current()
             .removePendingNotificationRequests(withIdentifiers: ["pomodoro-complete"])
+    }
+
+    private func startLiveActivity(endTime: Date) {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        let state = PomodoroActivityAttributes.ContentState(
+            endTime: endTime,
+            isPaused: false,
+            pausedRemaining: Int(TimerViewModel.pomodoroDuration)
+        )
+        do {
+            liveActivity = try Activity.request(
+                attributes: PomodoroActivityAttributes(),
+                content: .init(state: state, staleDate: nil)
+            )
+        } catch {}
+    }
+
+    private func updateLiveActivity(endTime: Date, isPaused: Bool) {
+        guard let activity = liveActivity else { return }
+        let state = PomodoroActivityAttributes.ContentState(
+            endTime: endTime,
+            isPaused: isPaused,
+            pausedRemaining: remainingSeconds
+        )
+        Task { await activity.update(.init(state: state, staleDate: nil)) }
+    }
+
+    private func endLiveActivity() {
+        guard let activity = liveActivity else { return }
+        liveActivity = nil
+        Task { await activity.end(nil, dismissalPolicy: .immediate) }
     }
 }
