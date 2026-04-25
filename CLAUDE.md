@@ -6,7 +6,8 @@
 - TODO.md - informal list of changes to be done, bugs, new features etc, update it when implementing todo tasks from this file
 
 ## Branch & workflow
-- Always work directly on `main`. No worktrees, no feature branches, no PRs unless explicitly asked.
+- Always operate in the top-level repo directory (`/Users/Shared/git/github.com/pomodoro/`). Never `cd` into or edit files under `.claude/worktrees/*`. If the harness has placed you inside a worktree, switch to the main repo dir before doing any work.
+- Prefer working directly on `main`. Use a feature branch only when explicitly asked.
 - Ivan tests locally in Xcode on his iPhone before deciding to keep or revert.
 
 ## Pull requests
@@ -20,6 +21,7 @@
 ## File and git access
 - Read and edit any file in the project, even untracked or unstaged ones, without asking.
 - Run any `git` or `gh` command without asking. Still confirm before destructive operations (`push --force`, `reset --hard`, `branch -D`, etc.).
+- Run any standard CLI commands (`find`, `ls`, `mv`, `cp`, `grep`, `rm`, etc.) without asking.
 
 ## Code style
 - SwiftUI + SwiftData, iOS 17+, MVVM architecture.
