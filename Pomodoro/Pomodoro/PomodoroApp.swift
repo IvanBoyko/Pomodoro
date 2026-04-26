@@ -32,6 +32,7 @@ struct PomodoroApp: App {
             ContentView()
                 .onAppear {
                     UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
+                    TimerViewModel.endAllPomodoroActivities()
                 }
         }
         .modelContainer(sharedModelContainer)

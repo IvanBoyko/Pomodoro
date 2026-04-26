@@ -216,8 +216,15 @@ final class TimerViewModel {
             .removePendingNotificationRequests(withIdentifiers: ["pomodoro-complete"])
     }
 
+    static func endAllPomodoroActivities() {
+        for activity in Activity<PomodoroActivityAttributes>.activities {
+            Task { await activity.end(nil, dismissalPolicy: .immediate) }
+        }
+    }
+
     private func startLiveActivity(endTime: Date) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        Self.endAllPomodoroActivities()
         let state = PomodoroActivityAttributes.ContentState(
             endTime: endTime,
             isPaused: false,
