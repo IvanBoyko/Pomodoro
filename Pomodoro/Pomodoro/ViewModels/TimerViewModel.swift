@@ -22,7 +22,10 @@ final class TimerViewModel {
         return 25 * 60
     }()
 
-    var remainingSeconds: Int = Int(TimerViewModel.pomodoroDuration)
+    let duration: TimeInterval
+    private let now: () -> Date
+
+    var remainingSeconds: Int
     var isRunning: Bool = false
     var isPaused: Bool = false
     var isCompleted: Bool = false
@@ -35,6 +38,13 @@ final class TimerViewModel {
     private var hapticPlayer: CHHapticPatternPlayer?
     private var liveActivity: Activity<PomodoroActivityAttributes>?
 
+    init(now: @escaping () -> Date = Date.init,
+         duration: TimeInterval = TimerViewModel.pomodoroDuration) {
+        self.now = now
+        self.duration = duration
+        self.remainingSeconds = Int(duration)
+    }
+
     var completedStartDate: Date? { startDate }
     var completedEndDate: Date? { endDate }
 
@@ -45,19 +55,19 @@ final class TimerViewModel {
     }
 
     var progress: Double {
-        1.0 - Double(remainingSeconds) / TimerViewModel.pomodoroDuration
+        1.0 - Double(remainingSeconds) / duration
     }
 
     func start() {
         guard !isRunning else { return }
         isRunning = true
         isCompleted = false
-        startDate = Date()
+        startDate = now()
         endDate = nil
-        remainingSeconds = Int(TimerViewModel.pomodoroDuration)
+        remainingSeconds = Int(duration)
 
         scheduleNotification()
-        startLiveActivity(endTime: Date().addingTimeInterval(TimerViewModel.pomodoroDuration))
+        startLiveActivity(endTime: now().addingTimeInterval(duration))
 
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
@@ -72,7 +82,7 @@ final class TimerViewModel {
         isRunning = false
         isPaused = true
         cancelNotification()
-        updateLiveActivity(endTime: Date().addingTimeInterval(TimeInterval(remainingSeconds)),
+        updateLiveActivity(endTime: now().addingTimeInterval(TimeInterval(remainingSeconds)),
                            isPaused: true)
     }
 
@@ -81,9 +91,9 @@ final class TimerViewModel {
         isPaused = false
         isRunning = true
         // Shift startDate so elapsed-based tick gives the correct remaining time
-        startDate = Date().addingTimeInterval(-(TimerViewModel.pomodoroDuration - Double(remainingSeconds)))
+        startDate = now().addingTimeInterval(-(duration - Double(remainingSeconds)))
         scheduleNotification(in: TimeInterval(remainingSeconds))
-        updateLiveActivity(endTime: Date().addingTimeInterval(TimeInterval(remainingSeconds)),
+        updateLiveActivity(endTime: now().addingTimeInterval(TimeInterval(remainingSeconds)),
                            isPaused: false)
 
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -98,7 +108,7 @@ final class TimerViewModel {
         isRunning = false
         isPaused = false
         isCompleted = false
-        remainingSeconds = Int(TimerViewModel.pomodoroDuration)
+        remainingSeconds = Int(duration)
         startDate = nil
         cancelNotification()
         endLiveActivity()
@@ -107,13 +117,13 @@ final class TimerViewModel {
     func resetAfterSave() {
         isCompleted = false
         showCategoryPicker = false
-        remainingSeconds = Int(TimerViewModel.pomodoroDuration)
+        remainingSeconds = Int(duration)
     }
 
     func recalculateOnForeground() {
         guard isRunning, let start = startDate else { return }
-        let elapsed = Date().timeIntervalSince(start)
-        let remaining = TimerViewModel.pomodoroDuration - elapsed
+        let elapsed = now().timeIntervalSince(start)
+        let remaining = duration - elapsed
         if remaining <= 0 {
             complete()
         } else {
@@ -121,12 +131,12 @@ final class TimerViewModel {
         }
     }
 
-    private func tick() {
+    func tick() {
         guard isRunning else { return }
         guard let start = startDate else { return }
 
-        let elapsed = Date().timeIntervalSince(start)
-        let remaining = TimerViewModel.pomodoroDuration - elapsed
+        let elapsed = now().timeIntervalSince(start)
+        let remaining = duration - elapsed
 
         if remaining <= 0 {
             complete()
@@ -140,7 +150,7 @@ final class TimerViewModel {
         isRunning = false
         isCompleted = true
         remainingSeconds = 0
-        endDate = Date()
+        endDate = now()
         showCategoryPicker = true
         triggerCompletionHaptic()
         endLiveActivity()
@@ -151,7 +161,8 @@ final class TimerViewModel {
         timer = nil
     }
 
-    private func scheduleNotification(in interval: TimeInterval = TimerViewModel.pomodoroDuration) {
+    private func scheduleNotification(in interval: TimeInterval? = nil) {
+        let interval = interval ?? duration
         let content = UNMutableNotificationContent()
         content.title = "Pomodoro Complete!"
         content.body = "Time to assign a category to your session."
@@ -228,7 +239,7 @@ final class TimerViewModel {
         let state = PomodoroActivityAttributes.ContentState(
             endTime: endTime,
             isPaused: false,
-            pausedRemaining: Int(TimerViewModel.pomodoroDuration)
+            pausedRemaining: Int(duration)
         )
         do {
             liveActivity = try Activity.request(

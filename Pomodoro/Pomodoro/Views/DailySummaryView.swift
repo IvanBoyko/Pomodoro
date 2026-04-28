@@ -14,24 +14,8 @@ struct DailySummaryView: View {
 
     @State private var selectedDate: Date = Date()
 
-    private var sessionsForDate: [PomodoroSession] {
-        let calendar = Calendar.current
-        return allSessions.filter { calendar.isDate($0.completedAt, inSameDayAs: selectedDate) }
-    }
-
-    private var categoryBreakdown: [(category: PomodoroCategory, count: Int)] {
-        var counts: [PersistentIdentifier: Int] = [:]
-        for session in sessionsForDate {
-            if let cat = session.category {
-                counts[cat.persistentModelID, default: 0] += 1
-            }
-        }
-        return categories
-            .compactMap { cat in
-                let count = counts[cat.persistentModelID] ?? 0
-                return count > 0 ? (category: cat, count: count) : nil
-            }
-            .sorted { $0.count > $1.count }
+    private var summary: DaySummary {
+        DaySummary(sessions: allSessions, categories: categories, on: selectedDate)
     }
 
     var body: some View {
@@ -45,7 +29,7 @@ struct DailySummaryView: View {
                 Section {
                     HStack {
                         VStack(alignment: .leading) {
-                            Text("\(sessionsForDate.count)")
+                            Text("\(summary.totalCount)")
                                 .font(.system(size: 48, weight: .bold, design: .rounded))
                             Text("Pomodoros")
                                 .font(.subheadline)
@@ -53,8 +37,7 @@ struct DailySummaryView: View {
                         }
                         Spacer()
                         VStack(alignment: .trailing) {
-                            let totalMinutes = sessionsForDate.count * 25
-                            Text("\(totalMinutes)")
+                            Text("\(summary.totalMinutes)")
                                 .font(.system(size: 48, weight: .bold, design: .rounded))
                                 .foregroundStyle(.secondary)
                             Text("Minutes focused")
@@ -65,9 +48,9 @@ struct DailySummaryView: View {
                     .padding(.vertical, 8)
                 }
 
-                if !categoryBreakdown.isEmpty {
+                if !summary.breakdown.isEmpty {
                     Section("By Category") {
-                        ForEach(categoryBreakdown, id: \.category.id) { item in
+                        ForEach(summary.breakdown, id: \.category.id) { item in
                             HStack {
                                 Circle()
                                     .fill(Color(hex: item.category.colorHex))
@@ -82,11 +65,11 @@ struct DailySummaryView: View {
                     }
 
                     Section("Distribution") {
-                        let total = sessionsForDate.count
+                        let total = summary.totalCount
                         VStack(spacing: 8) {
                             GeometryReader { geometry in
                                 HStack(spacing: 2) {
-                                    ForEach(categoryBreakdown, id: \.category.id) { item in
+                                    ForEach(summary.breakdown, id: \.category.id) { item in
                                         RoundedRectangle(cornerRadius: 4)
                                             .fill(Color(hex: item.category.colorHex))
                                             .frame(

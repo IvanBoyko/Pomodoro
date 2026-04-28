@@ -15,12 +15,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build
+      - name: Build & Test
         run: |
-          xcodebuild \
+          xcodebuild test \
             -project Pomodoro/Pomodoro.xcodeproj \
             -scheme Pomodoro \
-            -destination 'generic/platform=iOS' \
+            -destination 'platform=iOS Simulator,OS=latest,name=iPhone 17' \
             -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+            CODE_SIGNING_ALLOWED=NO

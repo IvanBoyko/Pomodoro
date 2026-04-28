@@ -14,43 +14,11 @@ struct WeeklySummaryView: View {
 
     @State private var weekOffset: Int = 0
 
-    private var calendar: Calendar { Calendar.current }
-
-    private var weekDates: [Date] {
-        let today = calendar.startOfDay(for: Date())
-        let weekday = calendar.component(.weekday, from: today)
-        // Monday = start of week
-        let mondayOffset = (weekday + 5) % 7
-        guard let monday = calendar.date(byAdding: .day, value: -mondayOffset + (weekOffset * 7), to: today) else {
-            return []
-        }
-        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: monday) }
-    }
-
-    private var weekLabel: String {
-        guard let first = weekDates.first, let last = weekDates.last else { return "" }
-        let fmt = DateFormatter()
-        fmt.dateFormat = "MMM d"
-        return "\(fmt.string(from: first)) – \(fmt.string(from: last))"
-    }
-
-    private func sessionsFor(date: Date, category: PomodoroCategory) -> Int {
-        allSessions.filter { session in
-            session.category?.persistentModelID == category.persistentModelID
-                && calendar.isDate(session.completedAt, inSameDayAs: date)
-        }.count
-    }
-
-    private func totalFor(date: Date) -> Int {
-        allSessions.filter { calendar.isDate($0.completedAt, inSameDayAs: date) }.count
-    }
-
-    private func totalFor(category: PomodoroCategory) -> Int {
-        weekDates.reduce(0) { $0 + sessionsFor(date: $1, category: category) }
-    }
-
-    private var weekTotal: Int {
-        weekDates.reduce(0) { $0 + totalFor(date: $1) }
+    private var stats: WeekStatistics {
+        WeekStatistics(sessions: allSessions,
+                       categories: categories,
+                       weekOffset: weekOffset,
+                       today: Date())
     }
 
     private let dayLabels = ["M", "T", "W", "T", "F", "S", "S"]
@@ -67,7 +35,7 @@ struct WeeklySummaryView: View {
                     }
 
                     Spacer()
-                    Text(weekLabel)
+                    Text(stats.weekLabel)
                         .font(.headline)
                     Spacer()
 
@@ -84,7 +52,7 @@ struct WeeklySummaryView: View {
 
                 // Week total
                 VStack(spacing: 4) {
-                    Text("\(weekTotal)")
+                    Text("\(stats.weekTotal)")
                         .font(.system(size: 36, weight: .bold, design: .rounded))
                     Text("Pomodoros this week")
                         .font(.subheadline)
@@ -133,8 +101,8 @@ struct WeeklySummaryView: View {
                                 .padding(.leading, 8)
 
                                 ForEach(0..<7, id: \.self) { dayIndex in
-                                    let count = dayIndex < weekDates.count
-                                        ? sessionsFor(date: weekDates[dayIndex], category: category)
+                                    let count = dayIndex < stats.weekDates.count
+                                        ? stats.sessions(on: stats.weekDates[dayIndex], category: category)
                                         : 0
                                     Text(count > 0 ? "\(count)" : "–")
                                         .font(.callout.monospacedDigit())
@@ -142,7 +110,7 @@ struct WeeklySummaryView: View {
                                         .frame(maxWidth: .infinity)
                                 }
 
-                                Text("\(totalFor(category: category))")
+                                Text("\(stats.total(for: category))")
                                     .font(.callout.bold().monospacedDigit())
                                     .frame(maxWidth: .infinity)
                             }
@@ -160,8 +128,8 @@ struct WeeklySummaryView: View {
                                 .padding(.leading, 8)
 
                             ForEach(0..<7, id: \.self) { dayIndex in
-                                let count = dayIndex < weekDates.count
-                                    ? totalFor(date: weekDates[dayIndex])
+                                let count = dayIndex < stats.weekDates.count
+                                    ? stats.total(on: stats.weekDates[dayIndex])
                                     : 0
                                 Text(count > 0 ? "\(count)" : "–")
                                     .font(.callout.bold().monospacedDigit())
@@ -169,7 +137,7 @@ struct WeeklySummaryView: View {
                                     .frame(maxWidth: .infinity)
                             }
 
-                            Text("\(weekTotal)")
+                            Text("\(stats.weekTotal)")
                                 .font(.callout.bold().monospacedDigit())
                                 .frame(maxWidth: .infinity)
                         }
