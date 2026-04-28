@@ -14,6 +14,7 @@
 ## Pull requests
 - Do not create PRs by default. Only create one when explicitly asked.
 - When asked to merge a PR, default to `gh pr merge <num> --rebase --delete-branch`.
+- When a PR completes a TODO.md entry, remove the entry in the same PR — don't leave it as a post-merge cleanup commit.
 
 ## Commits
 - Don't auto-commit. Make the change, then wait for Ivan to review before committing.
@@ -35,6 +36,7 @@
 - App supports both portrait and landscape on iPhone. UI layouts must work in both — prefer proportional/responsive sizing (Grid column spans, `maxWidth: .infinity`, percentages) over fixed-point widths.
 - No unnecessary comments. Only add a comment when the *why* is non-obvious.
 - Don't add features, abstractions, or error handling beyond what the task requires.
+- While the app is pre-production, refactors that improve testability or code quality are welcome — the no-extra-abstractions rule applies most strictly once we're shipping. When in doubt, ask.
 
 ## Communication
 - Keep responses short and to the point.
