@@ -13,6 +13,7 @@
 
 ## Pull requests
 - Do not create PRs by default. Only create one when explicitly asked.
+- When asked to merge a PR, default to `gh pr merge <num> --rebase --delete-branch`.
 
 ## Commits
 - Don't auto-commit. Make the change, then wait for Ivan to review before committing.
@@ -30,6 +31,7 @@
 
 ## Code style
 - SwiftUI + SwiftData, iOS 17+, MVVM architecture.
+- App supports both portrait and landscape on iPhone. UI layouts must work in both — prefer proportional/responsive sizing (Grid column spans, `maxWidth: .infinity`, percentages) over fixed-point widths.
 - No unnecessary comments. Only add a comment when the *why* is non-obvious.
 - Don't add features, abstractions, or error handling beyond what the task requires.
 
@@ -37,3 +39,6 @@
 - Keep responses short and to the point.
 - When referencing code, include file path and line number so Ivan can navigate directly.
 - No emojis unless asked.
+
+## Retrospectives
+- When Ivan asks for a "Retrospective", after summarising lessons, always offer to update CLAUDE.md and `.claude/` settings to capture them. Wait for explicit approval before editing — these are repo-level files Ivan reviews before committing. Auto-memory under `~/.claude/...` can still be updated silently.
