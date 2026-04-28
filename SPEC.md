@@ -67,6 +67,7 @@ Shared between the main app and the widget extension.
 - Cell = count of Pomodoros
 - Bottom row = daily totals
 - Right column = category totals
+- Category-name column is twice the width of each day column (proportional, scales with orientation) so longer names fit without truncation
 
 ### 5. Categories Management
 - List of categories with color indicators

@@ -98,6 +98,7 @@ struct WeeklySummaryView: View {
                         // Header row
                         GridRow {
                             Text("")
+                                .gridCellColumns(2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.leading, 8)
 
@@ -127,6 +128,7 @@ struct WeeklySummaryView: View {
                                         .font(.caption)
                                         .lineLimit(1)
                                 }
+                                .gridCellColumns(2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.leading, 8)
 
@@ -153,6 +155,7 @@ struct WeeklySummaryView: View {
                         GridRow {
                             Text("Total")
                                 .font(.caption.bold())
+                                .gridCellColumns(2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.leading, 8)
 
