@@ -27,6 +27,7 @@
 
 ## Planning & debugging
 - For features touching iOS extensions, capabilities, or entitlements (App Groups, Keychain Sharing, Push Notifications, Background Modes, etc.), surface any paid Apple Developer Program dependency at planning time, before requesting manual Xcode steps. Ivan's account is currently free-tier pending approval.
+- When uncertain whether a capability requires the paid Apple Developer Program, say so explicitly rather than asserting either way. Propose the cheapest possible verification first (e.g. wire only the entitlement and attempt a build) before writing dependent code.
 - When diagnosing unclear behaviour (unexpected logs, intermittent failures, "this doesn't work"), label the diagnosis as a hypothesis and propose a way to verify it before applying the fix. Don't ship a fix justified by a guess.
 
 ## Code style
