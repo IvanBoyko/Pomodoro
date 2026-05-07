@@ -56,6 +56,8 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				LiveActivity/PomodoroActivityAttributes.swift,
+				LiveActivity/PomodoroAlarmMetadata.swift,
+				LiveActivity/PomodoroAlarmIntents.swift,
 			);
 			target = C4AA55C62F9D5E3A00CB890B /* PomodoroWidgetExtensionExtension */;
 		};
@@ -66,6 +68,13 @@
 			);
 			target = C4AA55C62F9D5E3A00CB890B /* PomodoroWidgetExtensionExtension */;
 		};
+		C4F100D0F00DF00DF00DF00D /* Exceptions for "Pomodoro" folder in "Pomodoro" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = C45516372F77BBE900DD7426 /* Pomodoro */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -73,6 +82,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				C43623022F9D61B300B394B2 /* Exceptions for "Pomodoro" folder in "PomodoroWidgetExtensionExtension" target */,
+				C4F100D0F00DF00DF00DF00D /* Exceptions for "Pomodoro" folder in "Pomodoro" target */,
 			);
 			path = Pomodoro;
 			sourceTree = "<group>";
@@ -456,8 +466,8 @@
 				DEVELOPMENT_TEAM = QYT76L5836;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Pomodoro/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSAlarmKitUsageDescription = "Used to ring the Pomodoro completion alarm through Focus modes.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -493,8 +503,8 @@
 				DEVELOPMENT_TEAM = QYT76L5836;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Pomodoro/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSAlarmKitUsageDescription = "Used to ring the Pomodoro completion alarm through Focus modes.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

@@ -15,11 +15,6 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
-#if canImport(AlarmKit)
-@available(iOS 26.1, *)
-fileprivate struct PomodoroAlarmMetadata: AlarmMetadata {}
-#endif
-
 @Observable
 final class TimerViewModel {
     static let pomodoroDuration: TimeInterval = {
@@ -66,8 +61,18 @@ final class TimerViewModel {
         1.0 - Double(remainingSeconds) / duration
     }
 
+    /// On iOS 26.1+, the AlarmKit alarm IS the Live Activity surface — the custom
+    /// PomodoroActivityAttributes activity must not be started in parallel.
+    private var alarmKitOwnsLiveActivity: Bool {
+        #if canImport(AlarmKit)
+        if #available(iOS 26.1, *) { return true }
+        #endif
+        return false
+    }
+
     func start() {
         guard !isRunning else { return }
+        Self.endAllPomodoroActivities()
         isRunning = true
         isCompleted = false
         startDate = now()
@@ -75,7 +80,9 @@ final class TimerViewModel {
         remainingSeconds = Int(duration)
 
         scheduleNotification()
-        startLiveActivity(endTime: now().addingTimeInterval(duration))
+        if !alarmKitOwnsLiveActivity {
+            startLiveActivity(endTime: now().addingTimeInterval(duration))
+        }
 
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
@@ -89,6 +96,12 @@ final class TimerViewModel {
         stopTimer()
         isRunning = false
         isPaused = true
+        #if canImport(AlarmKit)
+        if #available(iOS 26.1, *), let id = alarmID {
+            try? AlarmManager.shared.pause(id: id)
+            return
+        }
+        #endif
         cancelNotification()
         updateLiveActivity(endTime: now().addingTimeInterval(TimeInterval(remainingSeconds)),
                            isPaused: true)
@@ -100,10 +113,21 @@ final class TimerViewModel {
         isRunning = true
         // Shift startDate so elapsed-based tick gives the correct remaining time
         startDate = now().addingTimeInterval(-(duration - Double(remainingSeconds)))
+
+        #if canImport(AlarmKit)
+        if #available(iOS 26.1, *), let id = alarmID {
+            try? AlarmManager.shared.resume(id: id)
+            startTickTimer()
+            return
+        }
+        #endif
         scheduleNotification(in: TimeInterval(remainingSeconds))
         updateLiveActivity(endTime: now().addingTimeInterval(TimeInterval(remainingSeconds)),
                            isPaused: false)
+        startTickTimer()
+    }
 
+    private func startTickTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
                 self?.tick()
@@ -119,7 +143,9 @@ final class TimerViewModel {
         remainingSeconds = Int(duration)
         startDate = nil
         cancelNotification()
-        endLiveActivity()
+        if !alarmKitOwnsLiveActivity {
+            endLiveActivity()
+        }
     }
 
     func resetAfterSave() {
@@ -160,9 +186,19 @@ final class TimerViewModel {
         remainingSeconds = 0
         endDate = now()
         showCategoryPicker = true
-        cancelNotification()
         triggerCompletionHaptic()
-        endLiveActivity()
+        if !alarmKitOwnsLiveActivity {
+            cancelNotification()
+            endLiveActivity()
+            return
+        }
+        // AlarmKit path: only suppress the alarm if the user is currently watching
+        // the in-app countdown (foreground/active). If we're backgrounded or in the
+        // middle of foregrounding (e.g. unlock after the alarm rang), leave AlarmKit
+        // alone so its alerting state can run/finish naturally.
+        if UIApplication.shared.applicationState == .active {
+            cancelNotification()
+        }
     }
 
     private func stopTimer() {
@@ -207,8 +243,20 @@ final class TimerViewModel {
     private func scheduleAlarmKitTimer(in interval: TimeInterval) {
         let id = UUID()
         alarmID = id
+        let pauseButton = AlarmButton(
+            text: "Pause",
+            textColor: .white,
+            systemImageName: "pause.fill"
+        )
+        let resumeButton = AlarmButton(
+            text: "Resume",
+            textColor: .white,
+            systemImageName: "play.fill"
+        )
         let presentation = AlarmPresentation(
-            alert: AlarmPresentation.Alert(title: "Pomodoro Complete!")
+            alert: AlarmPresentation.Alert(title: "Pomodoro Complete!"),
+            countdown: AlarmPresentation.Countdown(title: "Pomodoro", pauseButton: pauseButton),
+            paused: AlarmPresentation.Paused(title: "Pomodoro", resumeButton: resumeButton)
         )
         let attributes = AlarmAttributes<PomodoroAlarmMetadata>(
             presentation: presentation,
@@ -216,12 +264,15 @@ final class TimerViewModel {
         )
         let config = AlarmManager.AlarmConfiguration.timer(
             duration: interval,
-            attributes: attributes
+            attributes: attributes,
+            stopIntent: PomodoroAlarmStopIntent(alarmID: id),
+            secondaryIntent: PomodoroAlarmSecondaryIntent(alarmID: id)
         )
         Task { @MainActor [weak self] in
             do {
                 _ = try await AlarmManager.shared.schedule(id: id, configuration: config)
             } catch {
+                print("AlarmKit schedule failed (auth=\(AlarmManager.shared.authorizationState)): \(error)")
                 if self?.alarmID == id { self?.alarmID = nil }
                 return
             }
@@ -298,11 +349,19 @@ final class TimerViewModel {
         for activity in Activity<PomodoroActivityAttributes>.activities {
             Task { await activity.end(nil, dismissalPolicy: .immediate) }
         }
+        #if canImport(AlarmKit)
+        if #available(iOS 26.1, *) {
+            if let alarms = try? AlarmManager.shared.alarms {
+                for alarm in alarms {
+                    try? AlarmManager.shared.cancel(id: alarm.id)
+                }
+            }
+        }
+        #endif
     }
 
     private func startLiveActivity(endTime: Date) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        Self.endAllPomodoroActivities()
         let state = PomodoroActivityAttributes.ContentState(
             endTime: endTime,
             isPaused: false,

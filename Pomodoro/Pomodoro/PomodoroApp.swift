@@ -37,7 +37,19 @@ struct PomodoroApp: App {
                     UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
                     #if canImport(AlarmKit)
                     if #available(iOS 26.1, *) {
-                        Task { _ = try? await AlarmManager.shared.requestAuthorization() }
+                        Task {
+                            do {
+                                let state = try await AlarmManager.shared.requestAuthorization()
+                                print("AlarmKit authorization: \(state)")
+                            } catch {
+                                print("AlarmKit authorization request failed: \(error)")
+                            }
+                        }
+                        Task {
+                            for await alarms in AlarmManager.shared.alarmUpdates {
+                                print("AlarmKit alarms: \(alarms.map { "\($0.id.uuidString.prefix(8))=\($0.state)" })")
+                            }
+                        }
                     }
                     #endif
                     TimerViewModel.endAllPomodoroActivities()
