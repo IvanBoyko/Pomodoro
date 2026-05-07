@@ -169,6 +169,11 @@ final class TimerViewModel {
         remainingSeconds = Int(duration)
     }
 
+    func makeSession(category: PomodoroCategory) -> PomodoroSession? {
+        guard let start = startDate, let end = endDate else { return nil }
+        return PomodoroSession(startedAt: start, completedAt: end, category: category)
+    }
+
     func recalculateOnForeground() {
         guard isRunning || isPaused else { return }
 

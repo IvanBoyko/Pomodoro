@@ -85,11 +85,9 @@ struct CategoryPickerSheet: View {
     }
 
     private func saveSession(category: PomodoroCategory) {
-        guard let start = timerVM.completedStartDate,
-              let end = timerVM.completedEndDate else { return }
-
-        let session = PomodoroSession(startedAt: start, completedAt: end, category: category)
-        modelContext.insert(session)
+        if let session = timerVM.makeSession(category: category) {
+            modelContext.insert(session)
+        }
         timerVM.resetAfterSave()
         dismiss()
     }
