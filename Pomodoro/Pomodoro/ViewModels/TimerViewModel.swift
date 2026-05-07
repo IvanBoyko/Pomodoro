@@ -51,8 +51,8 @@ final class TimerViewModel {
         #if canImport(AlarmKit)
         if #available(iOS 26.1, *) {
             alarmUpdatesTask = Task { @MainActor [weak self] in
-                for await _ in AlarmManager.shared.alarmUpdates {
-                    self?.syncFromAlarmKit()
+                for await alarms in AlarmManager.shared.alarmUpdates {
+                    self?.syncFromAlarmKit(alarms: alarms)
                 }
             }
         }
@@ -241,13 +241,19 @@ final class TimerViewModel {
     }
 
     @available(iOS 26.1, *)
-    private func syncFromAlarmKit() {
+    private func syncFromAlarmKit(alarms: [Alarm]) {
         guard let id = alarmID else { return }
-        if let snapshot = currentAlarmSnapshot(id: id) {
-            applyAlarmSnapshot(snapshot)
+        let alarmExists = alarms.contains(where: { $0.id == id })
+        if alarmExists {
+            // Activity may lag the alarm registration by a moment — leave VM state
+            // alone if the snapshot isn't ready yet, rather than treating the alarm
+            // as gone.
+            if let snapshot = currentAlarmSnapshot(id: id) {
+                applyAlarmSnapshot(snapshot)
+            }
         } else if isRunning || isPaused {
-            // Alarm vanished while we still thought it was active — user dismissed
-            // the alert UI from the lock screen. Drive completion in the app.
+            // Alarm removed from AlarmManager — user dismissed the alert UI from
+            // the lock screen. Drive completion in the app.
             complete()
         }
     }
