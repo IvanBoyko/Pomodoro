@@ -40,12 +40,27 @@ final class TimerViewModel {
     private var hapticEngine: CHHapticEngine?
     private var liveActivity: Activity<PomodoroActivityAttributes>?
     private var alarmID: UUID?
+    private var alarmUpdatesTask: Task<Void, Never>?
 
     init(now: @escaping () -> Date = Date.init,
          duration: TimeInterval = TimerViewModel.pomodoroDuration) {
         self.now = now
         self.duration = duration
         self.remainingSeconds = Int(duration)
+
+        #if canImport(AlarmKit)
+        if #available(iOS 26.1, *) {
+            alarmUpdatesTask = Task { @MainActor [weak self] in
+                for await _ in AlarmManager.shared.alarmUpdates {
+                    self?.syncFromAlarmKit()
+                }
+            }
+        }
+        #endif
+    }
+
+    deinit {
+        alarmUpdatesTask?.cancel()
     }
 
     var completedStartDate: Date? { startDate }
@@ -155,6 +170,16 @@ final class TimerViewModel {
     }
 
     func recalculateOnForeground() {
+        guard isRunning || isPaused else { return }
+
+        #if canImport(AlarmKit)
+        if #available(iOS 26.1, *), let id = alarmID,
+           let snapshot = currentAlarmSnapshot(id: id) {
+            applyAlarmSnapshot(snapshot)
+            return
+        }
+        #endif
+
         guard isRunning, let start = startDate else { return }
         let elapsed = now().timeIntervalSince(start)
         let remaining = duration - elapsed
@@ -164,6 +189,69 @@ final class TimerViewModel {
             remainingSeconds = Int(remaining)
         }
     }
+
+    #if canImport(AlarmKit)
+    @available(iOS 26.1, *)
+    private struct AlarmSnapshot {
+        let isPaused: Bool
+        let remainingSeconds: Int
+    }
+
+    @available(iOS 26.1, *)
+    private func currentAlarmSnapshot(id: UUID) -> AlarmSnapshot? {
+        for activity in Activity<AlarmAttributes<PomodoroAlarmMetadata>>.activities {
+            let state = activity.content.state
+            guard state.alarmID == id else { continue }
+            switch state.mode {
+            case .countdown(let countdown):
+                let remaining = countdown.fireDate.timeIntervalSince(now())
+                return AlarmSnapshot(isPaused: false, remainingSeconds: max(0, Int(remaining)))
+            case .paused(let paused):
+                let remaining = paused.totalCountdownDuration - paused.previouslyElapsedDuration
+                return AlarmSnapshot(isPaused: true, remainingSeconds: max(0, Int(remaining)))
+            case .alert:
+                return AlarmSnapshot(isPaused: false, remainingSeconds: 0)
+            @unknown default:
+                return nil
+            }
+        }
+        return nil
+    }
+
+    @available(iOS 26.1, *)
+    private func applyAlarmSnapshot(_ snapshot: AlarmSnapshot) {
+        if snapshot.remainingSeconds <= 0 {
+            complete()
+            return
+        }
+        remainingSeconds = snapshot.remainingSeconds
+        if snapshot.isPaused {
+            if isRunning { stopTimer() }
+            isRunning = false
+            isPaused = true
+        } else {
+            if isPaused { isPaused = false }
+            if !isRunning {
+                isRunning = true
+                startTickTimer()
+            }
+            // Re-anchor startDate so subsequent tick() ticks compute against AlarmKit's truth.
+            startDate = now().addingTimeInterval(-(duration - Double(snapshot.remainingSeconds)))
+        }
+    }
+
+    @available(iOS 26.1, *)
+    private func syncFromAlarmKit() {
+        guard let id = alarmID else { return }
+        if let snapshot = currentAlarmSnapshot(id: id) {
+            applyAlarmSnapshot(snapshot)
+        } else if isRunning || isPaused {
+            // Alarm vanished while we still thought it was active — user dismissed
+            // the alert UI from the lock screen. Drive completion in the app.
+            complete()
+        }
+    }
+    #endif
 
     func tick() {
         guard isRunning else { return }
