@@ -94,6 +94,13 @@ Shared between the main app and the widget extension.
 - Foreground notifications suppress the banner and play sound only (the in-app category picker already conveys completion visually)
 - Orphan Live Activity cleanup: at app launch and before starting a new timer, any pre-existing `PomodoroActivityAttributes` activities are ended. Defends against crashes / force-quits / `TimerViewModel` deallocation that would leave a stale countdown on the lock screen.
 
+## Notifications
+- Authorization is requested at app launch with options `[.alert, .badge, .sound, .timeSensitive]`.
+- The completion notification is delivered at `UNNotificationInterruptionLevel.timeSensitive`, matching the system Clock/Timer app. It breaks through Do Not Disturb and Focus modes by default.
+- Time Sensitive delivery requires the `com.apple.developer.usernotifications.time-sensitive` entitlement (`Pomodoro/Pomodoro.entitlements`), which depends on a paid Apple Developer Program membership.
+- Users retain control: per-app and per-Focus-mode toggles in iOS Settings can disable Time Sensitive delivery. This is by design — match the system Timer's UX rather than override user intent.
+- Critical Alerts (silent-mode bypass) are intentionally not used: inappropriate for a productivity timer and require separate Apple approval.
+
 ## Constraints
 - No server / no accounts — all data local via SwiftData
 - Pomodoro duration fixed at 25 minutes (debug builds may override via the `POMODORO_DURATION` env var — see README)

@@ -166,6 +166,7 @@ final class TimerViewModel {
         content.title = "Pomodoro Complete!"
         content.body = "Time to assign a category to your session."
         content.sound = .default
+        content.interruptionLevel = .timeSensitive
 
         let trigger = UNTimeIntervalNotificationTrigger(
             timeInterval: interval,
