@@ -95,11 +95,11 @@ Shared between the main app and the widget extension.
 - Orphan Live Activity cleanup: at app launch and before starting a new timer, any pre-existing `PomodoroActivityAttributes` activities are ended. Defends against crashes / force-quits / `TimerViewModel` deallocation that would leave a stale countdown on the lock screen.
 
 ## Notifications
-- Authorization is requested at app launch with options `[.alert, .badge, .sound, .timeSensitive]`.
-- The completion notification is delivered at `UNNotificationInterruptionLevel.timeSensitive`, matching the system Clock/Timer app. It breaks through Do Not Disturb and Focus modes by default.
-- Time Sensitive delivery requires the `com.apple.developer.usernotifications.time-sensitive` entitlement (`Pomodoro/Pomodoro.entitlements`), which depends on a paid Apple Developer Program membership.
-- Users retain control: per-app and per-Focus-mode toggles in iOS Settings can disable Time Sensitive delivery. This is by design — match the system Timer's UX rather than override user intent.
-- Critical Alerts (silent-mode bypass) are intentionally not used: inappropriate for a productivity timer and require separate Apple approval.
+- Authorization is requested at app launch with options `[.alert, .badge, .sound]`. (`.timeSensitive` was deprecated as an authorization option in iOS 15 — the entitlement alone signals intent.)
+- The completion notification is delivered at `UNNotificationInterruptionLevel.timeSensitive`, the strongest tier available to third-party apps. It breaks through Do Not Disturb when the user keeps the per-Focus "Time-Sensitive Notifications" toggle on (the default).
+- Time-Sensitive delivery requires the `com.apple.developer.usernotifications.time-sensitive` entitlement (`Pomodoro/Pomodoro.entitlements`); paid Apple Developer Program required.
+- Apple's Clock/Timer app does *not* ride this pipeline — it schedules via a private system alarm daemon, unavailable to third-party apps. When a user disables Time-Sensitive inside a Focus, our notifications fall back to the default tier and DND silences them, while Apple's Timer keeps ringing. This residual gap is unavoidable for a non-critical third-party app.
+- Critical Alerts (silent-mode bypass) are intentionally not used: would require separate Apple approval, granted only for safety/medical/severe-weather use cases.
 
 ## Constraints
 - No server / no accounts — all data local via SwiftData
