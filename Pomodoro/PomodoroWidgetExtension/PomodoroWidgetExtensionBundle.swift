@@ -10,5 +10,10 @@ import WidgetKit
 struct PomodoroWidgetExtensionBundle: WidgetBundle {
     var body: some Widget {
         PomodoroWidgetExtensionLiveActivity()
+        #if canImport(AlarmKit)
+        if #available(iOS 26.1, *) {
+            PomodoroAlarmLiveActivity()
+        }
+        #endif
     }
 }

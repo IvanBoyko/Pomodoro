@@ -7,8 +7,8 @@ A native iOS app (SwiftUI + SwiftData) for tracking Pomodoro sessions throughout
 - **Platform:** iOS 17+
 - **Framework:** SwiftUI
 - **Persistence:** SwiftData
-- **Notifications:** UserNotifications (local)
-- **Live Activity:** ActivityKit, rendered by a Widget Extension target (`PomodoroWidgetExtension`)
+- **Notifications:** UserNotifications (`.timeSensitive`) on iOS < 26.1; AlarmKit timer alarm on iOS 26.1+
+- **Live Activity:** ActivityKit, rendered by a Widget Extension target (`PomodoroWidgetExtension`). Two `Widget` configurations: `PomodoroWidgetExtensionLiveActivity` (custom `PomodoroActivityAttributes`, used on iOS < 26.1) and `PomodoroAlarmLiveActivity` (`AlarmAttributes<PomodoroAlarmMetadata>`, used on iOS 26.1+ to render the AlarmKit-owned countdown / paused / alert states)
 - **Architecture:** MVVM
 
 ## Data Models
@@ -77,8 +77,8 @@ Shared between the main app and the widget extension.
 ### 6. Lock Screen / Dynamic Island (Live Activity)
 - Pill on the lock screen shows "Pomodoro" label and live countdown (e.g. `22:32`)
 - Dynamic Island compact and expanded variants show the same countdown
-- No interactive controls (Pause/Cancel) yet — see TODO.md
-- Activity is dismissed immediately on cancel and on completion (so it doesn't visually clash with the "Pomodoro Complete!" notification)
+- **iOS 26.1+:** AlarmKit owns the Live Activity. Lock screen renders countdown / paused / alert states directly from `AlarmPresentationState.mode`. Pause and Resume buttons are wired to `PomodoroAlarmSecondaryIntent`; the alert-state Stop button is wired to `PomodoroAlarmStopIntent`. No separate Cancel button on the lock screen — AlarmKit's countdown presentation only supports a single secondary button (used for pause/resume); cancel remains in the in-app UI.
+- **iOS < 26.1:** custom `PomodoroActivityAttributes` Live Activity (no interactive controls), dismissed immediately on cancel and on completion.
 
 ## Navigation
 - TabView with 3 tabs: Timer, Today, Week
@@ -95,11 +95,17 @@ Shared between the main app and the widget extension.
 - Orphan Live Activity cleanup: at app launch and before starting a new timer, any pre-existing `PomodoroActivityAttributes` activities are ended. Defends against crashes / force-quits / `TimerViewModel` deallocation that would leave a stale countdown on the lock screen.
 
 ## Notifications
-- Authorization is requested at app launch with options `[.alert, .badge, .sound]`. (`.timeSensitive` was deprecated as an authorization option in iOS 15 — the entitlement alone signals intent.)
-- The completion notification is delivered at `UNNotificationInterruptionLevel.timeSensitive`, the strongest tier available to third-party apps. It breaks through Do Not Disturb when the user keeps the per-Focus "Time-Sensitive Notifications" toggle on (the default).
-- Time-Sensitive delivery requires the `com.apple.developer.usernotifications.time-sensitive` entitlement (`Pomodoro/Pomodoro.entitlements`); paid Apple Developer Program required.
-- Apple's Clock/Timer app does *not* ride this pipeline — it schedules via a private system alarm daemon, unavailable to third-party apps. When a user disables Time-Sensitive inside a Focus, our notifications fall back to the default tier and DND silences them, while Apple's Timer keeps ringing. This residual gap is unavoidable for a non-critical third-party app.
-- Critical Alerts (silent-mode bypass) are intentionally not used: would require separate Apple approval, granted only for safety/medical/severe-weather use cases.
+The app picks one of two completion-alert paths at runtime, gated on iOS version:
+
+**iOS 26.1+ — AlarmKit timer alarm.** Scheduled via `AlarmManager.shared.schedule(id:configuration:)` using `AlarmConfiguration.timer(...)`. The configuration carries a full `AlarmPresentation` (countdown / paused / alert) plus a `stopIntent` (`PomodoroAlarmStopIntent`) and a `secondaryIntent` (`PomodoroAlarmSecondaryIntent`, used for both pause and resume — it inspects current alarm state to pick the action). Requires `NSAlarmKitUsageDescription` (provided via a real `Pomodoro/Info.plist` partial that Xcode merges with the auto-generated keys — Xcode 26.4's `INFOPLIST_KEY_*` catalog does not yet recognize `NSAlarmKitUsageDescription`, so the build setting alone is silently dropped) and runtime user authorization, requested at app launch alongside the `UNUserNotificationCenter` authorization. AlarmKit alarms ring through every Focus mode by design — this closes the Sleep/Personal-Focus gap that plain notifications can't.
+
+On this path, **AlarmKit owns the Live Activity surface** (`AlarmAttributes<PomodoroAlarmMetadata>`). The custom `PomodoroActivityAttributes` activity is *not* started in parallel. Pause/resume go through `AlarmManager.shared.pause(id:)` / `.resume(id:)` instead of cancel-and-reschedule, so the system-managed countdown stays accurate.
+
+**iOS < 26.1 — `.timeSensitive` local notification + custom Live Activity.** Notification delivered via `UNNotificationInterruptionLevel.timeSensitive`, the strongest tier available to third-party apps. Breaks through Do Not Disturb when the user keeps the per-Focus "Time-Sensitive Notifications" toggle on (the default). Requires the `com.apple.developer.usernotifications.time-sensitive` entitlement (`Pomodoro/Pomodoro.entitlements`); paid Apple Developer Program required. Stays silent in Sleep/Personal Focus when those Focus modes have Time-Sensitive disabled at the iOS level. The Live Activity in this path is the custom `PomodoroActivityAttributes` activity, with no interactive controls.
+
+Only one path runs per timer. Critical Alerts (silent-mode bypass) are intentionally not used: separate Apple approval is granted only for safety/medical/severe-weather use cases.
+
+When the user is in the foreground and `complete()` runs before the alarm fires, the pending alarm/notification is cancelled to avoid a duplicate ring.
 
 ## Constraints
 - No server / no accounts — all data local via SwiftData
