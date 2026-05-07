@@ -32,7 +32,7 @@
 - When diagnosing unclear behaviour (unexpected logs, intermittent failures, "this doesn't work"), label the diagnosis as a hypothesis and propose a way to verify it before applying the fix. Don't ship a fix justified by a guess.
 - Same hypothesis rule applies to architect-mode claims about external platforms (Apple frameworks, iOS behaviour, third-party APIs). State unverified assertions as hypotheses, not facts; propose verification before they become load-bearing in a design.
 - After any signing-team or entitlement change made via Xcode UI, grep `DEVELOPMENT_TEAM` (and any other signing-related keys) across `project.pbxproj` to confirm all targets × all configs are aligned. Xcode's UI only updates the active build configuration.
-- Before asking Ivan to device-test, run `xcodebuild -scheme Pomodoro -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` from `Pomodoro/` to confirm compile + unit tests pass — cheapest pre-check before burning a device cycle.
+- Before asking Ivan to device-test, run `xcodebuild -project Pomodoro/Pomodoro.xcodeproj -scheme Pomodoro -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` from the repo root to confirm compile + unit tests pass — cheapest pre-check before burning a device cycle. Pass `-project` rather than `cd Pomodoro && …`; chaining `cd` mutates shell cwd for subsequent Bash calls and re-prompts permissions for compound commands.
 - Hardware-only frameworks (CoreHaptics, CoreLocation, CoreMotion, audio session) can't be exercised on simulator. Plan a device-test step from the start of the task; simulator only confirms compile correctness.
 - Some iOS framework logs are noise even when code is correct: CHHapticEngine warnings during audio-session setup (`Player start failed`, `Startup timeout`), CoreData sandbox/stat errors at launch. If user-visible behaviour is right, accept them rather than chasing.
 - When changing build settings, Info.plist keys, entitlements, or signing, verify the built artifact contains the expected change (`plutil -p "<DerivedData>/.../<App>.app/Info.plist"`, etc.). "Build succeeded" doesn't prove the change landed. Xcode's `INFOPLIST_KEY_*` catalog can silently drop newer Apple-defined keys (e.g. `NSAlarmKitUsageDescription` on Xcode 26.4) — fall back to a real partial Info.plist file via `INFOPLIST_FILE` if `plutil -p` shows the key didn't make it.
@@ -46,6 +46,7 @@
 - No unnecessary comments. Only add a comment when the *why* is non-obvious.
 - Don't add features, abstractions, or error handling beyond what the task requires.
 - While the app is pre-production, refactors that improve testability or code quality are welcome — the no-extra-abstractions rule applies most strictly once we're shipping. When in doubt, ask.
+- Prefer testing decisions on `@Observable` view models over private SwiftUI `View` methods. When a `View` method depends on `@Environment(\.dismiss)` / `@Environment(\.modelContext)`, extract the decision into the VM (e.g. a small factory like `makeSession(category:) -> PomodoroSession?`) and let the View be a thin pass-through that always dismisses.
 
 ## Communication
 - Keep responses short and to the point.
