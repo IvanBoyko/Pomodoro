@@ -27,9 +27,11 @@
 - Run any standard CLI commands (`find`, `ls`, `mv`, `cp`, `grep`, `rm`, etc.) without asking.
 
 ## Planning & debugging
-- For features touching iOS extensions, capabilities, or entitlements (App Groups, Keychain Sharing, Push Notifications, Background Modes, etc.), surface any paid Apple Developer Program dependency at planning time, before requesting manual Xcode steps. Ivan's account is currently free-tier pending approval.
+- For features touching iOS extensions, capabilities, or entitlements (App Groups, Keychain Sharing, Push Notifications, Background Modes, etc.), surface any paid Apple Developer Program dependency at planning time, before requesting manual Xcode steps. Ivan's account is in the paid program; some entitlements (e.g. Critical Alerts) still require additional Apple manual approval beyond paid membership.
 - When uncertain whether a capability requires the paid Apple Developer Program, say so explicitly rather than asserting either way. Propose the cheapest possible verification first (e.g. wire only the entitlement and attempt a build) before writing dependent code.
 - When diagnosing unclear behaviour (unexpected logs, intermittent failures, "this doesn't work"), label the diagnosis as a hypothesis and propose a way to verify it before applying the fix. Don't ship a fix justified by a guess.
+- Same hypothesis rule applies to architect-mode claims about external platforms (Apple frameworks, iOS behaviour, third-party APIs). State unverified assertions as hypotheses, not facts; propose verification before they become load-bearing in a design.
+- After any signing-team or entitlement change made via Xcode UI, grep `DEVELOPMENT_TEAM` (and any other signing-related keys) across `project.pbxproj` to confirm all targets × all configs are aligned. Xcode's UI only updates the active build configuration.
 - Before asking Ivan to device-test, run `xcodebuild -scheme Pomodoro -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` from `Pomodoro/` to confirm compile + unit tests pass — cheapest pre-check before burning a device cycle.
 - Hardware-only frameworks (CoreHaptics, CoreLocation, CoreMotion, audio session) can't be exercised on simulator. Plan a device-test step from the start of the task; simulator only confirms compile correctness.
 - Some iOS framework logs are noise even when code is correct: CHHapticEngine warnings during audio-session setup (`Player start failed`, `Startup timeout`), CoreData sandbox/stat errors at launch. If user-visible behaviour is right, accept them rather than chasing.
