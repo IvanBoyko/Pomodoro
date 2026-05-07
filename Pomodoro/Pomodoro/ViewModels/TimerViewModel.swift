@@ -6,11 +6,19 @@
 //
 
 import ActivityKit
+#if canImport(AlarmKit)
+import AlarmKit
+#endif
 import CoreHaptics
 import Foundation
 import SwiftUI
 import UIKit
 import UserNotifications
+
+#if canImport(AlarmKit)
+@available(iOS 26.1, *)
+fileprivate struct PomodoroAlarmMetadata: AlarmMetadata {}
+#endif
 
 @Observable
 final class TimerViewModel {
@@ -36,6 +44,7 @@ final class TimerViewModel {
     private var endDate: Date?
     private var hapticEngine: CHHapticEngine?
     private var liveActivity: Activity<PomodoroActivityAttributes>?
+    private var alarmID: UUID?
 
     init(now: @escaping () -> Date = Date.init,
          duration: TimeInterval = TimerViewModel.pomodoroDuration) {
@@ -151,6 +160,7 @@ final class TimerViewModel {
         remainingSeconds = 0
         endDate = now()
         showCategoryPicker = true
+        cancelNotification()
         triggerCompletionHaptic()
         endLiveActivity()
     }
@@ -162,6 +172,16 @@ final class TimerViewModel {
 
     private func scheduleNotification(in interval: TimeInterval? = nil) {
         let interval = interval ?? duration
+        #if canImport(AlarmKit)
+        if #available(iOS 26.1, *) {
+            scheduleAlarmKitTimer(in: interval)
+            return
+        }
+        #endif
+        scheduleLocalNotification(in: interval)
+    }
+
+    private func scheduleLocalNotification(in interval: TimeInterval) {
         let content = UNMutableNotificationContent()
         content.title = "Pomodoro Complete!"
         content.body = "Time to assign a category to your session."
@@ -181,6 +201,37 @@ final class TimerViewModel {
 
         UNUserNotificationCenter.current().add(request)
     }
+
+    #if canImport(AlarmKit)
+    @available(iOS 26.1, *)
+    private func scheduleAlarmKitTimer(in interval: TimeInterval) {
+        let id = UUID()
+        alarmID = id
+        let presentation = AlarmPresentation(
+            alert: AlarmPresentation.Alert(title: "Pomodoro Complete!")
+        )
+        let attributes = AlarmAttributes<PomodoroAlarmMetadata>(
+            presentation: presentation,
+            tintColor: .accentColor
+        )
+        let config = AlarmManager.AlarmConfiguration.timer(
+            duration: interval,
+            attributes: attributes
+        )
+        Task { @MainActor [weak self] in
+            do {
+                _ = try await AlarmManager.shared.schedule(id: id, configuration: config)
+            } catch {
+                if self?.alarmID == id { self?.alarmID = nil }
+                return
+            }
+            // If the VM cleared/replaced our id while scheduling was in flight, cancel the orphan.
+            if self?.alarmID != id {
+                try? AlarmManager.shared.cancel(id: id)
+            }
+        }
+    }
+    #endif
 
     private func triggerCompletionHaptic() {
         guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
@@ -232,6 +283,13 @@ final class TimerViewModel {
     }
 
     private func cancelNotification() {
+        #if canImport(AlarmKit)
+        if #available(iOS 26.1, *), let id = alarmID {
+            alarmID = nil
+            try? AlarmManager.shared.cancel(id: id)
+            return
+        }
+        #endif
         UNUserNotificationCenter.current()
             .removePendingNotificationRequests(withIdentifiers: ["pomodoro-complete"])
     }

@@ -7,7 +7,7 @@ A native iOS app (SwiftUI + SwiftData) for tracking Pomodoro sessions throughout
 - **Platform:** iOS 17+
 - **Framework:** SwiftUI
 - **Persistence:** SwiftData
-- **Notifications:** UserNotifications (local)
+- **Notifications:** UserNotifications (`.timeSensitive`) on iOS < 26.1; AlarmKit timer alarm on iOS 26.1+
 - **Live Activity:** ActivityKit, rendered by a Widget Extension target (`PomodoroWidgetExtension`)
 - **Architecture:** MVVM
 
@@ -95,11 +95,15 @@ Shared between the main app and the widget extension.
 - Orphan Live Activity cleanup: at app launch and before starting a new timer, any pre-existing `PomodoroActivityAttributes` activities are ended. Defends against crashes / force-quits / `TimerViewModel` deallocation that would leave a stale countdown on the lock screen.
 
 ## Notifications
-- Authorization is requested at app launch with options `[.alert, .badge, .sound]`. (`.timeSensitive` was deprecated as an authorization option in iOS 15 — the entitlement alone signals intent.)
-- The completion notification is delivered at `UNNotificationInterruptionLevel.timeSensitive`, the strongest tier available to third-party apps. It breaks through Do Not Disturb when the user keeps the per-Focus "Time-Sensitive Notifications" toggle on (the default).
-- Time-Sensitive delivery requires the `com.apple.developer.usernotifications.time-sensitive` entitlement (`Pomodoro/Pomodoro.entitlements`); paid Apple Developer Program required.
-- Apple's Clock/Timer app does *not* ride this pipeline — it schedules via a private system alarm daemon, unavailable to third-party apps. When a user disables Time-Sensitive inside a Focus, our notifications fall back to the default tier and DND silences them, while Apple's Timer keeps ringing. This residual gap is unavoidable for a non-critical third-party app.
-- Critical Alerts (silent-mode bypass) are intentionally not used: would require separate Apple approval, granted only for safety/medical/severe-weather use cases.
+The app picks one of two completion-alert paths at runtime, gated on iOS version:
+
+**iOS 26.1+ — AlarmKit timer alarm.** Scheduled via `AlarmManager.shared.schedule(id:configuration:)` using `AlarmConfiguration.timer(...)`. Requires `NSAlarmKitUsageDescription` (set via `INFOPLIST_KEY_NSAlarmKitUsageDescription` in `project.pbxproj`) and runtime user authorization, both requested at app launch alongside the `UNUserNotificationCenter` authorization. AlarmKit alarms ring through every Focus mode by design — this is the path that closes the Sleep/Personal-Focus gap that plain notifications can't.
+
+**iOS < 26.1 — `.timeSensitive` local notification.** Delivered via `UNNotificationInterruptionLevel.timeSensitive`, the strongest tier available to third-party apps. Breaks through Do Not Disturb when the user keeps the per-Focus "Time-Sensitive Notifications" toggle on (the default). Requires the `com.apple.developer.usernotifications.time-sensitive` entitlement (`Pomodoro/Pomodoro.entitlements`); paid Apple Developer Program required. Stays silent in Sleep/Personal Focus when those Focus modes have Time-Sensitive disabled at the iOS level.
+
+Only one path schedules per timer. On iOS 26.1+ devices the `.timeSensitive` notification is not used (don't ride both pipelines). The Live Activity is unchanged on both paths — it remains the custom `PomodoroActivityAttributes` activity. Critical Alerts (silent-mode bypass) are intentionally not used: separate Apple approval is granted only for safety/medical/severe-weather use cases.
+
+When the user is in the foreground and `complete()` runs before the alarm fires, the pending alarm/notification is cancelled to avoid a duplicate ring.
 
 ## Constraints
 - No server / no accounts — all data local via SwiftData

@@ -5,6 +5,9 @@
 //  Created by fenix on 28/03/2026.
 //
 
+#if canImport(AlarmKit)
+import AlarmKit
+#endif
 import SwiftUI
 import SwiftData
 import UserNotifications
@@ -32,6 +35,11 @@ struct PomodoroApp: App {
             ContentView()
                 .onAppear {
                     UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
+                    #if canImport(AlarmKit)
+                    if #available(iOS 26.1, *) {
+                        Task { _ = try? await AlarmManager.shared.requestAuthorization() }
+                    }
+                    #endif
                     TimerViewModel.endAllPomodoroActivities()
                 }
         }
