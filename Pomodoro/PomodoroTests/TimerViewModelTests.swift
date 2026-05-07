@@ -222,4 +222,43 @@ import Foundation
         #expect(vm.isCompleted == false)
         #expect(vm.remainingSeconds == 60)
     }
+
+    // MARK: - CategoryPickerSheet save contract (audit finding #5)
+
+    @Test func resetAfterSaveDismissesPickerEvenWhenNeverStarted() {
+        let (vm, _) = Self.makeVM()
+        vm.showCategoryPicker = true
+        vm.resetAfterSave()
+        #expect(vm.showCategoryPicker == false)
+        #expect(vm.completedStartDate == nil)
+    }
+
+    @Test func makeSessionReturnsNilBeforeAnyRun() {
+        let (vm, _) = Self.makeVM()
+        let cat = PomodoroCategory(name: "Work")
+        #expect(vm.makeSession(category: cat) == nil)
+    }
+
+    @Test func makeSessionReturnsValidSessionAfterCompletion() {
+        let (vm, clock) = Self.makeVM(duration: 60)
+        let started = clock.now
+        vm.start()
+        clock.advance(60)
+        vm.tick()
+        let cat = PomodoroCategory(name: "Work")
+        let session = vm.makeSession(category: cat)
+        #expect(session?.startedAt == started)
+        #expect(session?.completedAt == vm.completedEndDate)
+        #expect(session?.category?.name == "Work")
+    }
+
+    @Test func makeSessionReturnsNilAfterCancel() {
+        let (vm, clock) = Self.makeVM(duration: 60)
+        vm.start()
+        clock.advance(60)
+        vm.tick()
+        vm.cancel()
+        let cat = PomodoroCategory(name: "Work")
+        #expect(vm.makeSession(category: cat) == nil)
+    }
 }
