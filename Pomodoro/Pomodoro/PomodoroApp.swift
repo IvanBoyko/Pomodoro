@@ -31,7 +31,7 @@ struct PomodoroApp: App {
         WindowGroup {
             ContentView()
                 .onAppear {
-                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound, .timeSensitive]) { _, _ in }
+                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
                     TimerViewModel.endAllPomodoroActivities()
                 }
         }
