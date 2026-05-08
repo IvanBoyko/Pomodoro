@@ -39,6 +39,7 @@
 - Before integrating a new Apple framework, read its `.swiftinterface` (in the SDK) and skim Apple's sample for the framework. Coupling between frameworks often isn't obvious from method signatures — e.g. `AlarmKit.AlarmAttributes` conforms to `ActivityKit.ActivityAttributes`, which means an AlarmKit alarm IS a Live Activity and requires a registered Widget to render.
 - When integrating a new framework, add observable logging on auth, schedule/configure, and key state transitions BEFORE the first device test. Silent `try?` / `catch {}` swallow exactly the errors that take a device cycle to surface; one device round-trip costs more than a few `print` lines.
 - `Timer.scheduledTimer` keeps firing for a brief runloop-fade-out window after the app moves to background. If a tick can reach an "end" state that cancels external system services (notifications, AlarmKit alarms, etc.), gate the cancellation on `UIApplication.shared.applicationState == .active` — otherwise short-duration tests silently kill the system-level state before the system can act on it.
+- AlarmKit lock-screen Live Activity layouts (digit alignment, control visibility, countdown-vs-paused presentation) are heavily template-driven by iOS. Differences across device widths or alarm states are usually system-controlled, not in our `AlarmPresentation` config — verify against Apple's templating before treating a layout difference as a bug to fix in our code.
 
 ## Code style
 - SwiftUI + SwiftData, iOS 17+, MVVM architecture.
