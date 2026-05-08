@@ -113,7 +113,11 @@ final class TimerViewModel {
         isPaused = true
         #if canImport(AlarmKit)
         if #available(iOS 26.1, *), let id = alarmID {
-            try? AlarmManager.shared.pause(id: id)
+            do {
+                try AlarmManager.shared.pause(id: id)
+            } catch {
+                print("AlarmKit pause failed: \(error)")
+            }
             return
         }
         #endif
@@ -131,7 +135,11 @@ final class TimerViewModel {
 
         #if canImport(AlarmKit)
         if #available(iOS 26.1, *), let id = alarmID {
-            try? AlarmManager.shared.resume(id: id)
+            do {
+                try AlarmManager.shared.resume(id: id)
+            } catch {
+                print("AlarmKit resume failed: \(error)")
+            }
             startTickTimer()
             return
         }
@@ -377,7 +385,11 @@ final class TimerViewModel {
             }
             // If the VM cleared/replaced our id while scheduling was in flight, cancel the orphan.
             if self?.alarmID != id {
-                try? AlarmManager.shared.cancel(id: id)
+                do {
+                    try AlarmManager.shared.cancel(id: id)
+                } catch {
+                    print("AlarmKit cancel failed (orphan): \(error)")
+                }
             }
         }
     }
@@ -415,7 +427,9 @@ final class TimerViewModel {
             let pattern = try CHHapticPattern(events: events, parameters: [])
             let player = try engine.makePlayer(with: pattern)
             try player.start(atTime: CHHapticTimeImmediate)
-        } catch {}
+        } catch {
+            print("Haptic pattern failed: \(error)")
+        }
     }
 
     private func ensureHapticEngine() throws -> CHHapticEngine {
@@ -436,7 +450,11 @@ final class TimerViewModel {
         #if canImport(AlarmKit)
         if #available(iOS 26.1, *), let id = alarmID {
             alarmID = nil
-            try? AlarmManager.shared.cancel(id: id)
+            do {
+                try AlarmManager.shared.cancel(id: id)
+            } catch {
+                print("AlarmKit cancel failed: \(error)")
+            }
             return
         }
         #endif
@@ -452,7 +470,11 @@ final class TimerViewModel {
         if #available(iOS 26.1, *) {
             if let alarms = try? AlarmManager.shared.alarms {
                 for alarm in alarms {
-                    try? AlarmManager.shared.cancel(id: alarm.id)
+                    do {
+                        try AlarmManager.shared.cancel(id: alarm.id)
+                    } catch {
+                        print("AlarmKit cancel failed (cleanup): \(error)")
+                    }
                 }
             }
         }
@@ -471,7 +493,9 @@ final class TimerViewModel {
                 attributes: PomodoroActivityAttributes(),
                 content: .init(state: state, staleDate: nil)
             )
-        } catch {}
+        } catch {
+            print("Live Activity start failed: \(error)")
+        }
     }
 
     private func updateLiveActivity(endTime: Date, isPaused: Bool) {
