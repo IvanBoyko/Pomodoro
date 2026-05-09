@@ -2,7 +2,7 @@
 
 ## Important files
 - SPEC.md - specification / Technical Requirements Document, keep it in sync with code changes
-- GEMINI.md - personal Ivan's preferences of using Gemini, suggest updates based on coding sessions in Gemini
+- .antigravityrules - personal Ivan's preferences of using Antigravity, suggest updates based on coding sessions
 - TODO.md - informal list of changes to be done, bugs, new features etc, update it when implementing todo tasks from this file
 
 ## Branch & workflow
@@ -55,4 +55,4 @@
 - No emojis unless asked.
 
 ## Retrospectives
-- When Ivan asks for a "Retrospective", after summarising lessons, always offer to update GEMINI.md and `.gemini/` settings to capture them. Wait for explicit approval before editing — these are repo-level files Ivan reviews before committing. Auto-memory under `~/.gemini/...` can still be updated silently.
+- When Ivan asks for a "Retrospective", after summarising lessons, always offer to update .antigravityrules and `.gemini/` settings to capture them. Wait for explicit approval before editing — these are repo-level files Ivan reviews before committing. Auto-memory under `~/.gemini/...` can still be updated silently.
