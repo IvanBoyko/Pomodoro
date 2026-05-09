@@ -9,10 +9,14 @@ import SwiftUI
 
 extension Color {
     init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        let scanner = Scanner(string: hex)
+        let cleanHex = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        let scanner = Scanner(string: cleanHex)
         var rgbValue: UInt64 = 0
-        scanner.scanHexInt64(&rgbValue)
+        guard scanner.scanHexInt64(&rgbValue) else {
+            assertionFailure("Failed to parse color hex string: \(hex)")
+            self = .gray
+            return
+        }
 
         let r = Double((rgbValue & 0xFF0000) >> 16) / 255.0
         let g = Double((rgbValue & 0x00FF00) >> 8) / 255.0

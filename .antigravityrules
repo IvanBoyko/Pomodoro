@@ -2,7 +2,7 @@
 
 ## Important files
 - SPEC.md - specification / Technical Requirements Document, keep it in sync with code changes
-- GEMINI.md - personal Ivan's preferences of using Gemini, suggest updates based on coding sessions in Gemini
+- .antigravityrules - personal Ivan's preferences of using Antigravity, suggest updates based on coding sessions
 - TODO.md - informal list of changes to be done, bugs, new features etc, update it when implementing todo tasks from this file
 
 ## Branch & workflow
@@ -13,7 +13,8 @@
 
 ## Pull requests
 - Do not create PRs by default. Only create one when explicitly asked.
-- When asked to merge a PR, default to `gh pr merge <num> --rebase --delete-branch`.
+- When formatting PR descriptions, use standard bullet points (`•`) for completed work (e.g., "Changes", "Bonus") so they are not clickable checkboxes. Use GitHub-style task lists (`- [ ]`, `- [x]`) exclusively for pending checklist items like the "Test plan".
+- Never merge a PR without explicit confirmation from Ivan. When asked to merge a PR, default to `gh pr merge <num> --rebase --delete-branch`.
 - When a PR completes a TODO.md entry, remove the entry in the same PR — don't leave it as a post-merge cleanup commit.
 
 ## Commits
@@ -55,4 +56,4 @@
 - No emojis unless asked.
 
 ## Retrospectives
-- When Ivan asks for a "Retrospective", after summarising lessons, always offer to update GEMINI.md and `.gemini/` settings to capture them. Wait for explicit approval before editing — these are repo-level files Ivan reviews before committing. Auto-memory under `~/.gemini/...` can still be updated silently.
+- When Ivan asks for a "Retrospective", after summarising lessons, always offer to update .antigravityrules and `.gemini/` settings to capture them. Wait for explicit approval before editing — these are repo-level files Ivan reviews before committing. Auto-memory under `~/.gemini/...` can still be updated silently.
