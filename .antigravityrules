@@ -13,7 +13,8 @@
 
 ## Pull requests
 - Do not create PRs by default. Only create one when explicitly asked.
-- When asked to merge a PR, default to `gh pr merge <num> --rebase --delete-branch`.
+- When formatting PR descriptions, use standard bullet points (`•`) for completed work (e.g., "Changes", "Bonus") so they are not clickable checkboxes. Use GitHub-style task lists (`- [ ]`, `- [x]`) exclusively for pending checklist items like the "Test plan".
+- Never merge a PR without explicit confirmation from Ivan. When asked to merge a PR, default to `gh pr merge <num> --rebase --delete-branch`.
 - When a PR completes a TODO.md entry, remove the entry in the same PR — don't leave it as a post-merge cleanup commit.
 
 ## Commits
