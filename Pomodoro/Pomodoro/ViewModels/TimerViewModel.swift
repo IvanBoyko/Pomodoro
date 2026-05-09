@@ -468,7 +468,8 @@ final class TimerViewModel {
         }
         #if canImport(AlarmKit)
         if #available(iOS 26.1, *) {
-            if let alarms = try? AlarmManager.shared.alarms {
+            do {
+                let alarms = try AlarmManager.shared.alarms
                 for alarm in alarms {
                     do {
                         try AlarmManager.shared.cancel(id: alarm.id)
@@ -476,6 +477,8 @@ final class TimerViewModel {
                         print("AlarmKit cancel failed (cleanup): \(error)")
                     }
                 }
+            } catch {
+                print("Failed to fetch alarms during cleanup: \(error)")
             }
         }
         #endif

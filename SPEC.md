@@ -4,7 +4,7 @@
 A native iOS app (SwiftUI + SwiftData) for tracking Pomodoro sessions throughout the day, categorizing them, and reviewing daily/weekly summaries. A Live Activity mirrors the running timer on the lock screen and Dynamic Island, like the official iOS Timer app.
 
 ## Target
-- **Platform:** iOS 17+
+- **Platform:** iOS 17.6+
 - **Framework:** SwiftUI
 - **Persistence:** SwiftData
 - **Notifications:** UserNotifications (`.timeSensitive`) on iOS < 26.1; AlarmKit timer alarm on iOS 26.1+
