@@ -199,13 +199,13 @@ final class TimerViewModel {
         guard isRunning || isPaused else { return }
 
         #if canImport(AlarmKit)
-        if #available(iOS 26.1, *), let id = alarmID {
-            if let alarm = (try? AlarmManager.shared.alarms)?.first(where: { $0.id == id }),
-               let snapshot = snapshotForAlarm(alarm) {
-                applyAlarmSnapshot(snapshot)
-            }
-            // No alarm or no snapshot — wait for alarmUpdates rather than
-            // racing AlarmKit truth with elapsed-based completion.
+        if #available(iOS 26.1, *), alarmID != nil {
+            // AlarmKit owns the timer. `alarmUpdates` (subscribed in init)
+            // delivers the current state when the consumer Task resumes after
+            // suspension, which calls syncFromAlarmKit. Don't perform a
+            // synchronous AlarmKit IPC read here on the main thread, and
+            // don't fall through to elapsed-based completion — that would
+            // race the asynchronous sync.
             return
         }
         #endif
