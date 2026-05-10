@@ -200,6 +200,7 @@ import Foundation
     @Test func recalculateOnForegroundUpdatesRemaining() {
         let (vm, clock) = Self.makeVM(duration: 60)
         vm.start()
+        vm.alarmID = nil // exercise the pre-26.1 / no-AlarmKit fallback
         clock.advance(25)
         vm.recalculateOnForeground()
         #expect(vm.remainingSeconds == 35)
@@ -209,6 +210,7 @@ import Foundation
     @Test func recalculateOnForegroundCompletesPastDuration() {
         let (vm, clock) = Self.makeVM(duration: 60)
         vm.start()
+        vm.alarmID = nil // exercise the pre-26.1 / no-AlarmKit fallback
         clock.advance(75)
         vm.recalculateOnForeground()
         #expect(vm.isCompleted == true)
@@ -221,6 +223,34 @@ import Foundation
         vm.recalculateOnForeground()
         #expect(vm.isCompleted == false)
         #expect(vm.remainingSeconds == 60)
+    }
+
+    // Regression: paused via lock-screen Live Activity → app suspended past
+    // the original deadline → unlock. The dormant local Timer used to fire
+    // on resume and call complete() while AlarmKit was still paused, leaving
+    // a stale paused alarm on the lock screen. With AlarmKit owning, the
+    // elapsed-math fallback in recalculateOnForeground must NOT run.
+    @Test func recalculateOnForegroundDefersToAlarmKitWhenAlarmIDSet() {
+        guard #available(iOS 26.1, *) else { return }
+        let (vm, clock) = Self.makeVM(duration: 60)
+        vm.start()
+        // alarmID is set synchronously by start() on iOS 26.1+; force it
+        // here to keep the test deterministic across simulator versions.
+        if vm.alarmID == nil { vm.alarmID = UUID() }
+        clock.advance(75)
+        vm.recalculateOnForeground()
+        #expect(vm.isCompleted == false)
+        #expect(vm.remainingSeconds == 60)
+        vm.cancel()
+    }
+
+    @Test func backgroundTransitionPreservesRunState() {
+        let (vm, _) = Self.makeVM()
+        vm.start()
+        vm.backgroundTransition()
+        #expect(vm.isRunning == true)
+        #expect(vm.isPaused == false)
+        vm.cancel()
     }
 
     // MARK: - CategoryPickerSheet save contract (audit finding #5)

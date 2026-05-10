@@ -39,7 +39,7 @@ final class TimerViewModel {
     private var endDate: Date?
     private var hapticEngine: CHHapticEngine?
     private var liveActivity: Activity<PomodoroActivityAttributes>?
-    private var alarmID: UUID?
+    var alarmID: UUID?
     private var alarmUpdatesTask: Task<Void, Never>?
 
     init(now: @escaping () -> Date = Date.init,
@@ -182,13 +182,28 @@ final class TimerViewModel {
         return PomodoroSession(startedAt: start, completedAt: end, category: category)
     }
 
+    /// Stop the per-second UI tick when leaving foreground. AlarmKit (or the
+    /// pre-26.1 local notification + custom Live Activity) drives countdown
+    /// and completion in the background; the next foreground enter re-establishes
+    /// the tick from AlarmKit truth or elapsed time.
+    func backgroundTransition() {
+        stopTimer()
+    }
+
     func recalculateOnForeground() {
+        // Always invalidate first — a dormant Timer left over from foreground
+        // could otherwise fire spuriously and race the AlarmKit-based sync below.
+        stopTimer()
+
         guard isRunning || isPaused else { return }
 
         #if canImport(AlarmKit)
-        if #available(iOS 26.1, *), let id = alarmID,
-           let snapshot = currentAlarmSnapshot(id: id) {
-            applyAlarmSnapshot(snapshot)
+        if #available(iOS 26.1, *), alarmID != nil {
+            if let id = alarmID, let snapshot = currentAlarmSnapshot(id: id) {
+                applyAlarmSnapshot(snapshot)
+            }
+            // No snapshot yet — wait for alarmUpdates rather than racing
+            // AlarmKit truth with elapsed-based completion.
             return
         }
         #endif
@@ -200,6 +215,7 @@ final class TimerViewModel {
             complete()
         } else {
             remainingSeconds = Int(remaining)
+            startTickTimer()
         }
     }
 
@@ -239,17 +255,18 @@ final class TimerViewModel {
         }
         remainingSeconds = snapshot.remainingSeconds
         if snapshot.isPaused {
-            if isRunning { stopTimer() }
+            stopTimer()
             isRunning = false
             isPaused = true
         } else {
-            if isPaused { isPaused = false }
-            if !isRunning {
-                isRunning = true
-                startTickTimer()
-            }
+            isPaused = false
+            isRunning = true
             // Re-anchor startDate so subsequent tick() ticks compute against AlarmKit's truth.
             startDate = now().addingTimeInterval(-(duration - Double(snapshot.remainingSeconds)))
+            // Start the tick if it isn't already running — handles the
+            // foreground-after-background case where the timer was killed
+            // by backgroundTransition().
+            if timer == nil { startTickTimer() }
         }
     }
 
