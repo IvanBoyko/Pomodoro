@@ -39,7 +39,7 @@ final class TimerViewModel {
     private var endDate: Date?
     private var hapticEngine: CHHapticEngine?
     private var liveActivity: Activity<PomodoroActivityAttributes>?
-    private var alarmID: UUID?
+    var alarmID: UUID?
     private var alarmUpdatesTask: Task<Void, Never>?
 
     init(now: @escaping () -> Date = Date.init,
@@ -151,6 +151,7 @@ final class TimerViewModel {
     }
 
     private func startTickTimer() {
+        guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
                 self?.tick()
@@ -182,13 +183,29 @@ final class TimerViewModel {
         return PomodoroSession(startedAt: start, completedAt: end, category: category)
     }
 
+    /// Stop the per-second UI tick when leaving foreground. AlarmKit (or the
+    /// pre-26.1 local notification + custom Live Activity) drives countdown
+    /// and completion in the background; the next foreground enter re-establishes
+    /// the tick from AlarmKit truth or elapsed time.
+    func backgroundTransition() {
+        stopTimer()
+    }
+
     func recalculateOnForeground() {
+        // Always invalidate first — a dormant Timer left over from foreground
+        // could otherwise fire spuriously and race the AlarmKit-based sync below.
+        stopTimer()
+
         guard isRunning || isPaused else { return }
 
         #if canImport(AlarmKit)
-        if #available(iOS 26.1, *), let id = alarmID,
-           let snapshot = currentAlarmSnapshot(id: id) {
-            applyAlarmSnapshot(snapshot)
+        if #available(iOS 26.1, *), alarmID != nil {
+            // AlarmKit owns the timer. `alarmUpdates` (subscribed in init)
+            // delivers the current state when the consumer Task resumes after
+            // suspension, which calls syncFromAlarmKit. Don't perform a
+            // synchronous AlarmKit IPC read here on the main thread, and
+            // don't fall through to elapsed-based completion — that would
+            // race the asynchronous sync.
             return
         }
         #endif
@@ -200,6 +217,7 @@ final class TimerViewModel {
             complete()
         } else {
             remainingSeconds = Int(remaining)
+            startTickTimer()
         }
     }
 
@@ -239,36 +257,51 @@ final class TimerViewModel {
         }
         remainingSeconds = snapshot.remainingSeconds
         if snapshot.isPaused {
-            if isRunning { stopTimer() }
+            stopTimer()
             isRunning = false
             isPaused = true
         } else {
-            if isPaused { isPaused = false }
-            if !isRunning {
-                isRunning = true
-                startTickTimer()
-            }
+            isPaused = false
+            isRunning = true
             // Re-anchor startDate so subsequent tick() ticks compute against AlarmKit's truth.
             startDate = now().addingTimeInterval(-(duration - Double(snapshot.remainingSeconds)))
+            // startTickTimer is idempotent — safe to call after foreground re-entry
+            // when the timer is already alive.
+            startTickTimer()
         }
     }
 
     @available(iOS 26.1, *)
     private func syncFromAlarmKit(alarms: [Alarm]) {
         guard let id = alarmID else { return }
-        let alarmExists = alarms.contains(where: { $0.id == id })
-        if alarmExists {
-            // Activity may lag the alarm registration by a moment — leave VM state
-            // alone if the snapshot isn't ready yet, rather than treating the alarm
-            // as gone.
-            if let snapshot = currentAlarmSnapshot(id: id) {
-                applyAlarmSnapshot(snapshot)
+        guard let alarm = alarms.first(where: { $0.id == id }) else {
+            if isRunning || isPaused {
+                // Alarm removed from AlarmManager — user dismissed the alert UI
+                // from the lock screen. Drive completion in the app.
+                complete()
             }
-        } else if isRunning || isPaused {
-            // Alarm removed from AlarmManager — user dismissed the alert UI from
-            // the lock screen. Drive completion in the app.
-            complete()
+            return
         }
+        if let snapshot = snapshotForAlarm(alarm) {
+            applyAlarmSnapshot(snapshot)
+        }
+        // Activity may lag the alarm registration by a moment — leave VM state
+        // alone if the snapshot isn't ready yet, rather than treating the alarm
+        // as gone.
+    }
+
+    /// Build a snapshot using `Alarm.state` for paused/running (authoritative)
+    /// and the Live Activity's content state for the remaining-seconds value.
+    /// The Activity content can lag behind `Alarm.state` during pause/resume
+    /// transitions, so reading paused-vs-running from the Activity alone risks
+    /// restarting the local tick when AlarmKit has already paused the alarm.
+    @available(iOS 26.1, *)
+    private func snapshotForAlarm(_ alarm: Alarm) -> AlarmSnapshot? {
+        guard let activitySnapshot = currentAlarmSnapshot(id: alarm.id) else { return nil }
+        let alarmIsPaused: Bool
+        if case .paused = alarm.state { alarmIsPaused = true }
+        else { alarmIsPaused = false }
+        return AlarmSnapshot(isPaused: alarmIsPaused, remainingSeconds: activitySnapshot.remainingSeconds)
     }
     #endif
 

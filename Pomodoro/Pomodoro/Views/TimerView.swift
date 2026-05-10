@@ -120,6 +120,9 @@ struct TimerView: View {
             .sheet(isPresented: $timerVM.showCategoryPicker) {
                 CategoryPickerSheet(timerVM: timerVM)
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+                timerVM.backgroundTransition()
+            }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 timerVM.recalculateOnForeground()
             }
