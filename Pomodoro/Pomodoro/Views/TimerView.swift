@@ -123,6 +123,9 @@ struct TimerView: View {
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 timerVM.recalculateOnForeground()
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+                timerVM.suspendForBackground()
+            }
         }
     }
 }

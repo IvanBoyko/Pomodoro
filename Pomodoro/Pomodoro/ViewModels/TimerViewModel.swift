@@ -99,11 +99,7 @@ final class TimerViewModel {
             startLiveActivity(endTime: now().addingTimeInterval(duration))
         }
 
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
-                self?.tick()
-            }
-        }
+        startTickTimer()
     }
 
     func pause() {
@@ -151,11 +147,16 @@ final class TimerViewModel {
     }
 
     private func startTickTimer() {
+        guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
                 self?.tick()
             }
         }
+    }
+
+    func suspendForBackground() {
+        stopTimer()
     }
 
     func cancel() {
@@ -200,6 +201,7 @@ final class TimerViewModel {
             complete()
         } else {
             remainingSeconds = Int(remaining)
+            startTickTimer()
         }
     }
 
@@ -243,11 +245,9 @@ final class TimerViewModel {
             isRunning = false
             isPaused = true
         } else {
-            if isPaused { isPaused = false }
-            if !isRunning {
-                isRunning = true
-                startTickTimer()
-            }
+            isPaused = false
+            isRunning = true
+            startTickTimer()
             // Re-anchor startDate so subsequent tick() ticks compute against AlarmKit's truth.
             startDate = now().addingTimeInterval(-(duration - Double(snapshot.remainingSeconds)))
         }
@@ -280,6 +280,12 @@ final class TimerViewModel {
         let remaining = duration - elapsed
 
         if remaining <= 0 {
+            #if canImport(AlarmKit)
+            if #available(iOS 26.1, *), let id = alarmID, let snapshot = currentAlarmSnapshot(id: id) {
+                applyAlarmSnapshot(snapshot)
+                if remainingSeconds > 0 { return }
+            }
+            #endif
             complete()
         } else {
             remainingSeconds = Int(remaining)
