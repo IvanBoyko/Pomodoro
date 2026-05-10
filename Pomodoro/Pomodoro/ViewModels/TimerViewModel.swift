@@ -151,6 +151,7 @@ final class TimerViewModel {
     }
 
     private func startTickTimer() {
+        guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
                 self?.tick()
@@ -264,10 +265,9 @@ final class TimerViewModel {
             isRunning = true
             // Re-anchor startDate so subsequent tick() ticks compute against AlarmKit's truth.
             startDate = now().addingTimeInterval(-(duration - Double(snapshot.remainingSeconds)))
-            // Start the tick if it isn't already running — handles the
-            // foreground-after-background case where the timer was killed
-            // by backgroundTransition().
-            if timer == nil { startTickTimer() }
+            // startTickTimer is idempotent — safe to call after foreground re-entry
+            // when the timer is already alive.
+            startTickTimer()
         }
     }
 
