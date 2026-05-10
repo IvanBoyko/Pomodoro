@@ -198,12 +198,13 @@ final class TimerViewModel {
         guard isRunning || isPaused else { return }
 
         #if canImport(AlarmKit)
-        if #available(iOS 26.1, *), alarmID != nil {
-            if let id = alarmID, let snapshot = currentAlarmSnapshot(id: id) {
+        if #available(iOS 26.1, *), let id = alarmID {
+            if let alarm = (try? AlarmManager.shared.alarms)?.first(where: { $0.id == id }),
+               let snapshot = snapshotForAlarm(alarm) {
                 applyAlarmSnapshot(snapshot)
             }
-            // No snapshot yet — wait for alarmUpdates rather than racing
-            // AlarmKit truth with elapsed-based completion.
+            // No alarm or no snapshot — wait for alarmUpdates rather than
+            // racing AlarmKit truth with elapsed-based completion.
             return
         }
         #endif
@@ -273,19 +274,34 @@ final class TimerViewModel {
     @available(iOS 26.1, *)
     private func syncFromAlarmKit(alarms: [Alarm]) {
         guard let id = alarmID else { return }
-        let alarmExists = alarms.contains(where: { $0.id == id })
-        if alarmExists {
-            // Activity may lag the alarm registration by a moment — leave VM state
-            // alone if the snapshot isn't ready yet, rather than treating the alarm
-            // as gone.
-            if let snapshot = currentAlarmSnapshot(id: id) {
-                applyAlarmSnapshot(snapshot)
+        guard let alarm = alarms.first(where: { $0.id == id }) else {
+            if isRunning || isPaused {
+                // Alarm removed from AlarmManager — user dismissed the alert UI
+                // from the lock screen. Drive completion in the app.
+                complete()
             }
-        } else if isRunning || isPaused {
-            // Alarm removed from AlarmManager — user dismissed the alert UI from
-            // the lock screen. Drive completion in the app.
-            complete()
+            return
         }
+        if let snapshot = snapshotForAlarm(alarm) {
+            applyAlarmSnapshot(snapshot)
+        }
+        // Activity may lag the alarm registration by a moment — leave VM state
+        // alone if the snapshot isn't ready yet, rather than treating the alarm
+        // as gone.
+    }
+
+    /// Build a snapshot using `Alarm.state` for paused/running (authoritative)
+    /// and the Live Activity's content state for the remaining-seconds value.
+    /// The Activity content can lag behind `Alarm.state` during pause/resume
+    /// transitions, so reading paused-vs-running from the Activity alone risks
+    /// restarting the local tick when AlarmKit has already paused the alarm.
+    @available(iOS 26.1, *)
+    private func snapshotForAlarm(_ alarm: Alarm) -> AlarmSnapshot? {
+        guard let activitySnapshot = currentAlarmSnapshot(id: alarm.id) else { return nil }
+        let alarmIsPaused: Bool
+        if case .paused = alarm.state { alarmIsPaused = true }
+        else { alarmIsPaused = false }
+        return AlarmSnapshot(isPaused: alarmIsPaused, remainingSeconds: activitySnapshot.remainingSeconds)
     }
     #endif
 
