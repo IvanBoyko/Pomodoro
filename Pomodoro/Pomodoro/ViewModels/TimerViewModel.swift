@@ -34,13 +34,34 @@ final class TimerViewModel {
     var isCompleted: Bool = false
     var showCategoryPicker: Bool = false
 
-    private var timer: Timer?
+    private(set) var timer: Timer?
     private var startDate: Date?
     private var endDate: Date?
     private var hapticEngine: CHHapticEngine?
     private var liveActivity: Activity<PomodoroActivityAttributes>?
     var alarmID: UUID?
     private var alarmUpdatesTask: Task<Void, Never>?
+
+    /// Test-friendly mirror of AlarmKit's `Alarm` + `Activity.content.state` —
+    /// captures the authoritative `Alarm.state` (paused/running/alert/other) and the
+    /// rendering-side remaining-seconds value separately, so the divergence between
+    /// the two during pause/resume transitions can be exercised in unit tests.
+    struct AlarmInfo: Equatable {
+        enum State: Equatable {
+            case countdown
+            case paused
+            case alert
+            /// Any state we don't model explicitly (forward-compatibility for future
+            /// AlarmKit cases). Treated as non-paused for state transitions; relies
+            /// on `activityRemainingSeconds` for timing.
+            case other
+        }
+        let id: UUID
+        let state: State
+        /// Remaining seconds derived from `Activity.content.state.mode`. `nil` when
+        /// no Activity is attached for this alarm yet (transient post-schedule state).
+        let activityRemainingSeconds: Int?
+    }
 
     init(now: @escaping () -> Date = Date.init,
          duration: TimeInterval = TimerViewModel.pomodoroDuration) {
@@ -221,60 +242,14 @@ final class TimerViewModel {
         }
     }
 
-    #if canImport(AlarmKit)
-    @available(iOS 26.1, *)
-    private struct AlarmSnapshot {
-        let isPaused: Bool
-        let remainingSeconds: Int
-    }
-
-    @available(iOS 26.1, *)
-    private func currentAlarmSnapshot(id: UUID) -> AlarmSnapshot? {
-        for activity in Activity<AlarmAttributes<PomodoroAlarmMetadata>>.activities {
-            let state = activity.content.state
-            guard state.alarmID == id else { continue }
-            switch state.mode {
-            case .countdown(let countdown):
-                let remaining = countdown.fireDate.timeIntervalSince(now())
-                return AlarmSnapshot(isPaused: false, remainingSeconds: max(0, Int(remaining)))
-            case .paused(let paused):
-                let remaining = paused.totalCountdownDuration - paused.previouslyElapsedDuration
-                return AlarmSnapshot(isPaused: true, remainingSeconds: max(0, Int(remaining)))
-            case .alert:
-                return AlarmSnapshot(isPaused: false, remainingSeconds: 0)
-            @unknown default:
-                return nil
-            }
-        }
-        return nil
-    }
-
-    @available(iOS 26.1, *)
-    private func applyAlarmSnapshot(_ snapshot: AlarmSnapshot) {
-        if snapshot.remainingSeconds <= 0 {
-            complete()
-            return
-        }
-        remainingSeconds = snapshot.remainingSeconds
-        if snapshot.isPaused {
-            stopTimer()
-            isRunning = false
-            isPaused = true
-        } else {
-            isPaused = false
-            isRunning = true
-            // Re-anchor startDate so subsequent tick() ticks compute against AlarmKit's truth.
-            startDate = now().addingTimeInterval(-(duration - Double(snapshot.remainingSeconds)))
-            // startTickTimer is idempotent — safe to call after foreground re-entry
-            // when the timer is already alive.
-            startTickTimer()
-        }
-    }
-
-    @available(iOS 26.1, *)
-    private func syncFromAlarmKit(alarms: [Alarm]) {
+    /// Pure state-machine entry point. Drives VM state from a list of `AlarmInfo`
+    /// values (one per known alarm). The framework-coupled `syncFromAlarmKit(alarms:)`
+    /// adapter below converts AlarmKit's `Alarm` + Activity content into `AlarmInfo`
+    /// and delegates here. Keeping this method free of framework types makes the
+    /// state transitions exhaustively testable — see `TimerViewModelTests`.
+    func syncFrom(alarmInfos: [AlarmInfo]) {
         guard let id = alarmID else { return }
-        guard let alarm = alarms.first(where: { $0.id == id }) else {
+        guard let info = alarmInfos.first(where: { $0.id == id }) else {
             if isRunning || isPaused {
                 // Alarm removed from AlarmManager — user dismissed the alert UI
                 // from the lock screen. Drive completion in the app.
@@ -282,26 +257,77 @@ final class TimerViewModel {
             }
             return
         }
-        if let snapshot = snapshotForAlarm(alarm) {
-            applyAlarmSnapshot(snapshot)
+        if info.state == .alert {
+            // Terminal — the alarm has fired. Ignore any stale activity remaining.
+            complete()
+            return
         }
-        // Activity may lag the alarm registration by a moment — leave VM state
-        // alone if the snapshot isn't ready yet, rather than treating the alarm
-        // as gone.
+        guard let remaining = info.activityRemainingSeconds else {
+            // Activity hasn't attached for this alarm yet (transient post-schedule
+            // state). Leave the VM alone and wait for the next update.
+            return
+        }
+        if remaining <= 0 {
+            complete()
+            return
+        }
+        applySnapshot(isPaused: info.state == .paused, remainingSeconds: remaining)
     }
 
-    /// Build a snapshot using `Alarm.state` for paused/running (authoritative)
-    /// and the Live Activity's content state for the remaining-seconds value.
-    /// The Activity content can lag behind `Alarm.state` during pause/resume
-    /// transitions, so reading paused-vs-running from the Activity alone risks
-    /// restarting the local tick when AlarmKit has already paused the alarm.
+    private func applySnapshot(isPaused: Bool, remainingSeconds: Int) {
+        self.remainingSeconds = remainingSeconds
+        if isPaused {
+            stopTimer()
+            isRunning = false
+            self.isPaused = true
+        } else {
+            self.isPaused = false
+            isRunning = true
+            // Re-anchor startDate so subsequent tick() computes against AlarmKit's truth.
+            startDate = now().addingTimeInterval(-(duration - Double(remainingSeconds)))
+            startTickTimer()
+        }
+    }
+
+    #if canImport(AlarmKit)
     @available(iOS 26.1, *)
-    private func snapshotForAlarm(_ alarm: Alarm) -> AlarmSnapshot? {
-        guard let activitySnapshot = currentAlarmSnapshot(id: alarm.id) else { return nil }
-        let alarmIsPaused: Bool
-        if case .paused = alarm.state { alarmIsPaused = true }
-        else { alarmIsPaused = false }
-        return AlarmSnapshot(isPaused: alarmIsPaused, remainingSeconds: activitySnapshot.remainingSeconds)
+    private func syncFromAlarmKit(alarms: [Alarm]) {
+        let infos = alarms.map { alarm -> AlarmInfo in
+            let state: AlarmInfo.State
+            switch alarm.state {
+            case .countdown: state = .countdown
+            case .paused: state = .paused
+            case .alerting: state = .alert
+            case .scheduled: state = .other
+            @unknown default: state = .other
+            }
+            return AlarmInfo(id: alarm.id,
+                             state: state,
+                             activityRemainingSeconds: activityRemainingSeconds(for: alarm.id))
+        }
+        syncFrom(alarmInfos: infos)
+    }
+
+    /// Reads remaining-seconds from the rendering surface (Live Activity content
+    /// state). Authoritative paused/running comes from `Alarm.state` instead —
+    /// the Activity content lags during pause/resume transitions.
+    @available(iOS 26.1, *)
+    private func activityRemainingSeconds(for id: UUID) -> Int? {
+        for activity in Activity<AlarmAttributes<PomodoroAlarmMetadata>>.activities {
+            let state = activity.content.state
+            guard state.alarmID == id else { continue }
+            switch state.mode {
+            case .countdown(let countdown):
+                return max(0, Int(countdown.fireDate.timeIntervalSince(now())))
+            case .paused(let paused):
+                return max(0, Int(paused.totalCountdownDuration - paused.previouslyElapsedDuration))
+            case .alert:
+                return 0
+            @unknown default:
+                return nil
+            }
+        }
+        return nil
     }
     #endif
 
@@ -322,6 +348,7 @@ final class TimerViewModel {
     private func complete() {
         stopTimer()
         isRunning = false
+        isPaused = false
         isCompleted = true
         remainingSeconds = 0
         endDate = now()

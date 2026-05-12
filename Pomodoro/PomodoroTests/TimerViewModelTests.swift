@@ -253,6 +253,183 @@ import Foundation
         vm.cancel()
     }
 
+    // MARK: - syncFrom(alarmInfos:) — AlarmKit state-machine seam
+
+    private static func alarmInfo(_ id: UUID,
+                                  _ state: TimerViewModel.AlarmInfo.State,
+                                  remaining: Int?) -> TimerViewModel.AlarmInfo {
+        TimerViewModel.AlarmInfo(id: id, state: state, activityRemainingSeconds: remaining)
+    }
+
+    // Regression for the PR #14 bug: the Live Activity content state lagged at
+    // `.countdown` while AlarmKit.Alarm.state had already transitioned to `.paused`.
+    // The VM must trust AlarmInfo.state (authoritative) and pause locally even
+    // when the rendering-side remaining value still looks like a running countdown.
+    @Test func syncFromPausedStateStopsTimerEvenWhenRemainingLooksLikeRunning() {
+        let (vm, _) = Self.makeVM(duration: 60)
+        vm.start()
+        let id = UUID()
+        vm.alarmID = id
+        vm.syncFrom(alarmInfos: [Self.alarmInfo(id, .paused, remaining: 42)])
+        #expect(vm.isPaused == true)
+        #expect(vm.isRunning == false)
+        #expect(vm.remainingSeconds == 42)
+        #expect(vm.timer == nil)
+        #expect(vm.isCompleted == false)
+        vm.cancel()
+    }
+
+    @Test func syncFromCountdownStateStartsTickWhenIdle() {
+        let (vm, _) = Self.makeVM(duration: 60)
+        vm.start()
+        vm.backgroundTransition() // kill the tick timer
+        let id = UUID()
+        vm.alarmID = id
+        #expect(vm.timer == nil)
+        vm.syncFrom(alarmInfos: [Self.alarmInfo(id, .countdown, remaining: 30)])
+        #expect(vm.isRunning == true)
+        #expect(vm.isPaused == false)
+        #expect(vm.remainingSeconds == 30)
+        #expect(vm.timer != nil)
+        vm.cancel()
+    }
+
+    @Test func syncFromCountdownAfterPausedResumesTick() {
+        let (vm, _) = Self.makeVM(duration: 60)
+        vm.start()
+        let id = UUID()
+        vm.alarmID = id
+        vm.syncFrom(alarmInfos: [Self.alarmInfo(id, .paused, remaining: 20)])
+        #expect(vm.isPaused == true)
+        vm.syncFrom(alarmInfos: [Self.alarmInfo(id, .countdown, remaining: 20)])
+        #expect(vm.isPaused == false)
+        #expect(vm.isRunning == true)
+        #expect(vm.timer != nil)
+        vm.cancel()
+    }
+
+    @Test func syncFromAlertStateCompletesRegardlessOfRemaining() {
+        let (vm, _) = Self.makeVM(duration: 60)
+        vm.start()
+        let id = UUID()
+        vm.alarmID = id
+        // Even if the activity hasn't caught up and still reports remaining > 0,
+        // the alarm state alone is terminal.
+        vm.syncFrom(alarmInfos: [Self.alarmInfo(id, .alert, remaining: 5)])
+        #expect(vm.isCompleted == true)
+        #expect(vm.isRunning == false)
+    }
+
+    @Test func syncFromRemainingZeroCompletes() {
+        let (vm, _) = Self.makeVM(duration: 60)
+        vm.start()
+        let id = UUID()
+        vm.alarmID = id
+        vm.syncFrom(alarmInfos: [Self.alarmInfo(id, .countdown, remaining: 0)])
+        #expect(vm.isCompleted == true)
+        #expect(vm.isRunning == false)
+    }
+
+    @Test func syncFromMissingActivityRemainingLeavesVMAlone() {
+        let (vm, _) = Self.makeVM(duration: 60)
+        vm.start()
+        let id = UUID()
+        vm.alarmID = id
+        let runningBefore = vm.isRunning
+        let remainingBefore = vm.remainingSeconds
+        // Alarm exists but Live Activity hasn't attached yet (transient post-schedule).
+        vm.syncFrom(alarmInfos: [Self.alarmInfo(id, .paused, remaining: nil)])
+        #expect(vm.isRunning == runningBefore)
+        #expect(vm.remainingSeconds == remainingBefore)
+        #expect(vm.isCompleted == false)
+        vm.cancel()
+    }
+
+    @Test func syncFromAlarmGoneWhileRunningCompletes() {
+        let (vm, _) = Self.makeVM(duration: 60)
+        vm.start()
+        let id = UUID()
+        vm.alarmID = id
+        // Empty alarms list — alarm removed from AlarmManager (user dismissed alert
+        // UI from the lock screen, or external cancel). Drive completion in-app.
+        vm.syncFrom(alarmInfos: [])
+        #expect(vm.isCompleted == true)
+        #expect(vm.isRunning == false)
+    }
+
+    @Test func syncFromAlarmGoneWhilePausedCompletes() {
+        let (vm, _) = Self.makeVM(duration: 60)
+        vm.start()
+        let id = UUID()
+        vm.alarmID = id
+        vm.syncFrom(alarmInfos: [Self.alarmInfo(id, .paused, remaining: 30)])
+        vm.syncFrom(alarmInfos: [])
+        #expect(vm.isCompleted == true)
+        #expect(vm.isRunning == false)
+        #expect(vm.isPaused == false)
+    }
+
+    @Test func completeClearsPausedFlag() {
+        // Regression: complete() previously left isPaused stuck at true if the
+        // VM completed from the paused state (e.g. alarm dismissed externally
+        // while paused). UI then showed a Resume button alongside the
+        // "Pomodoro Complete" sheet — semantically contradictory.
+        let (vm, _) = Self.makeVM(duration: 60)
+        vm.start()
+        vm.pause()
+        #expect(vm.isPaused == true)
+        let id = vm.alarmID ?? UUID()
+        vm.alarmID = id
+        vm.syncFrom(alarmInfos: []) // alarm gone → complete from paused
+        #expect(vm.isPaused == false)
+        #expect(vm.isCompleted == true)
+    }
+
+    @Test func syncFromAlarmGoneWhileIdleIsNoOp() {
+        let (vm, _) = Self.makeVM(duration: 60)
+        vm.alarmID = UUID() // pretend we still hold an ID but VM is idle
+        vm.syncFrom(alarmInfos: [])
+        #expect(vm.isCompleted == false)
+        #expect(vm.isRunning == false)
+        #expect(vm.isPaused == false)
+    }
+
+    @Test func syncFromWithoutAlarmIDIsNoOp() {
+        let (vm, _) = Self.makeVM(duration: 60)
+        vm.alarmID = nil
+        let beforeRunning = vm.isRunning
+        vm.syncFrom(alarmInfos: [Self.alarmInfo(UUID(), .paused, remaining: 10)])
+        #expect(vm.isRunning == beforeRunning)
+        #expect(vm.isCompleted == false)
+    }
+
+    @Test func syncFromOtherStateBehavesLikeCountdown() {
+        // Forward-compat: any non-paused, non-alert state (e.g. `.scheduled`, or
+        // a future AlarmKit case) is treated as running. The remaining-seconds
+        // value still drives completion via `remaining <= 0`.
+        let (vm, _) = Self.makeVM(duration: 60)
+        vm.start()
+        vm.backgroundTransition()
+        let id = UUID()
+        vm.alarmID = id
+        vm.syncFrom(alarmInfos: [Self.alarmInfo(id, .other, remaining: 15)])
+        #expect(vm.isRunning == true)
+        #expect(vm.isPaused == false)
+        #expect(vm.remainingSeconds == 15)
+        vm.cancel()
+    }
+
+    @Test func syncFromListWithoutOurAlarmTreatsItAsGone() {
+        let (vm, _) = Self.makeVM(duration: 60)
+        vm.start()
+        vm.alarmID = UUID()
+        // If the alarms list contains other entries but not ours, our alarm is
+        // effectively gone (same as an empty list).
+        vm.syncFrom(alarmInfos: [Self.alarmInfo(UUID(), .paused, remaining: 5)])
+        #expect(vm.isCompleted == true)
+        #expect(vm.isRunning == false)
+    }
+
     // MARK: - CategoryPickerSheet save contract (audit finding #5)
 
     @Test func resetAfterSaveDismissesPickerEvenWhenNeverStarted() {
