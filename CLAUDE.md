@@ -26,6 +26,9 @@
 - Run any `git` or `gh` command without asking. Still confirm before destructive operations (`push --force`, `reset --hard`, `branch -D`, etc.).
 - Run any standard CLI commands (`find`, `ls`, `mv`, `cp`, `grep`, `rm`, etc.) without asking.
 
+## Product scope
+- Multi-pomodoro / parallel pomodoros will never be a feature — it contradicts the Pomodoro Technique (one task per pomodoro). Don't propose it as a use case when motivating refactors, design decisions, or test scenarios. The "only one Pomodoro at a time" constraint in SPEC.md is permanent.
+
 ## Planning & debugging
 - For features touching iOS extensions, capabilities, or entitlements (App Groups, Keychain Sharing, Push Notifications, Background Modes, etc.), surface any paid Apple Developer Program dependency at planning time, before requesting manual Xcode steps. Ivan's account is in the paid program; some entitlements (e.g. Critical Alerts) still require additional Apple manual approval beyond paid membership.
 - When uncertain whether a capability requires the paid Apple Developer Program, say so explicitly rather than asserting either way. Propose the cheapest possible verification first (e.g. wire only the entitlement and attempt a build) before writing dependent code.
